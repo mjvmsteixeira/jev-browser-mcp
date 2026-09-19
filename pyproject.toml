@@ -1,0 +1,28 @@
+[project]
+name = "jev-browser-mcp"
+version = "0.1.0"
+description = "MCP server wrapping jev-ultrafast with safety guards for Claude Code."
+requires-python = ">=3.12"
+dependencies = [
+    "jev-ultrafast @ git+https://github.com/browser-use/jev-ultrafast@main",
+    "mcp>=1.12,<2",
+]
+
+[project.scripts]
+jev-browser-mcp = "jev_browser_mcp.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[dependency-groups]
+dev = ["pytest>=8.4,<9", "ruff>=0.14,<1"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
