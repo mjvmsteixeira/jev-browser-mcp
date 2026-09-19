@@ -15,7 +15,7 @@ export TYPESAFE_MODEL="${TYPESAFE_MODEL:-jev-latest}"
 # Field values are generated locally by Ollama; page text never leaves the machine for this step.
 export TEXT_MODEL_API_KEY="${TEXT_MODEL_API_KEY:-ollama}"
 export TEXT_MODEL_BASE_URL="${TEXT_MODEL_BASE_URL:-http://127.0.0.1:11434/v1}"
-export TEXT_MODEL="${TEXT_MODEL:-qwen2.5:3b}"
+export TEXT_MODEL="${TEXT_MODEL:-qwen3-coder:30b-a3b-q4_K_M}"
 export TEXT_MODEL_REASONING="${TEXT_MODEL_REASONING:-none}"
 
 exec /Users/mjvmst/.local/bin/uv run --quiet --directory "$DIR" jev-browser-mcp

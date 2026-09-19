@@ -11,11 +11,15 @@ from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
-from . import CDP_PORT
+from . import CDP_PORT, local_decider
 from .runner import run_task
 
 PROFILE_DIR = Path(os.environ.get("JEV_PROFILE_DIR", Path.home() / ".jev-browser" / "chrome-profile"))
 CHROME = os.environ.get("JEV_CHROME", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
+
+BACKEND = os.environ.get("JEV_DECISION_BACKEND") or ("typesafe" if os.environ.get("TYPESAFE_API_KEY") else "ollama")
+if BACKEND == "ollama":
+    local_decider.install()
 
 mcp = FastMCP("jev-browser")
 LOCK = threading.Lock()
@@ -70,6 +74,8 @@ def browse_interactive(
 ) -> dict:
     """Drive a real browser through a multi-step INTERACTIVE task (forms, filters, autocomplete,
     date pickers, SPAs) with the jev-ultrafast agent. Seconds per task, not milliseconds.
+    With decision_backend "ollama" (no TypeSafe key) each step takes ~2-4 s and decisions are
+    less reliable than Jev; verify outcomes carefully.
 
     Do NOT use to read a static page or a link (use WebFetch), to search the web (use WebSearch),
     or for library docs (use context7).
@@ -92,14 +98,12 @@ def browse_interactive(
         max_text_chars: Cap on returned page text.
         keep_open: Leave the tab open in the dedicated Chrome for the user to inspect.
     """
-    if not os.environ.get("TYPESAFE_API_KEY"):
-        return {"status": "error", "reason": "Missing TYPESAFE_API_KEY; run scripts/store-typesafe-key.sh"}
     if not LOCK.acquire(blocking=False):
         return {"status": "error", "reason": "Another browse_interactive run is in progress; run tasks sequentially"}
     try:
         with redirect_stdout(sys.stderr):
             ensure_chrome()
-            return run_task(
+            result = run_task(
                 make_agent,
                 start_url,
                 objective,
@@ -110,6 +114,7 @@ def browse_interactive(
                 max_text_chars=max_text_chars,
                 keep_open=keep_open,
             )
+            return {**result, "decision_backend": BACKEND}
     except Exception as error:
         return {"status": "error", "reason": f"{type(error).__name__}: {error}"}
     finally:
