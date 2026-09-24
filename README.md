@@ -1,63 +1,109 @@
 # jev-browser-mcp
 
-Servidor MCP que expõe o [jev-ultrafast](https://github.com/browser-use/jev-ultrafast) ao Claude Code como uma tool com guardas: `browse_interactive`.
+Servidor MCP que dá ao Claude Code um agente de browser: uma tool, `browse_interactive`, que abre um Chrome
+dedicado e executa tarefas interativas na web (preencher formulários, aplicar filtros, autocomplete, date
+pickers, SPAs).
 
-## Guardas
+Por dentro usa o [jev-ultrafast](https://github.com/browser-use/jev-ultrafast) da Browser Use, que em cada
+passo lê a página, numera os elementos com que se pode interagir e pede ao modelo [Jev](https://docs.typesafe.ai)
+da TypeSafe uma operação (`CLICK`, `TYPE_TEXT`, `SELECT`, `SCROLL`, `WAIT`, `DONE`, `BLOCKED`) e o número do
+elemento. O modelo nunca gera seletores nem coordenadas: só escolhe um número de uma lista que o código lhe deu.
 
-- `allowed_domains` obrigatório: `start_url`, links clicados e redireções fora da lista param a execução.
-- Cliques com cara de irreversíveis (comprar, apagar, enviar, reservar…, PT/EN) param com `needs_confirmation`, exceto com `allow_irreversible: true`.
-- Orçamento `max_steps` e `timeout_s` (verificado entre passos). Uma execução de cada vez.
-- Chrome dedicado (porta 9333, perfil `~/.jev-browser/chrome-profile`), nunca o perfil pessoal. Telemetria do browser-harness desligada.
-- Devolve `page_text_untrusted`; o agente navega, o Claude extrai e verifica.
+Este repositório é a camada que falta à volta disso: guardas de segurança, verificação do resultado,
+contabilidade de custos e as correções dos defeitos que apareceram a testar a sério.
 
-## Setup
+## O que acrescenta ao jev-ultrafast
+
+| | Porquê |
+| --- | --- |
+| **Lista de domínios permitida** | Obrigatória. O URL inicial, os links clicados e as redireções fora da lista param a execução |
+| **Paragem antes de ações irreversíveis** | Comprar, apagar, enviar, reservar e semelhantes (PT e EN) devolvem `needs_confirmation` em vez de clicar |
+| **Verificação do `DONE`** | O agente afirmar que terminou não é prova. Três perguntas Noul re-avaliam a página final |
+| **Guarda de ciclos** | Pára com a mesma operação repetida 4 vezes no mesmo elemento, ou 20 s de espera seguida |
+| **Orçamentos** | `max_steps` e `timeout_s`, e uma execução de cada vez |
+| **Chrome dedicado** | Porta 9333, perfil próprio, sem as sessões pessoais; telemetria do browser-harness desligada |
+| **Custo por tarefa** | Tokens de entrada e dólares em cada resultado |
+| **Modo local** | Sem chave TypeSafe, as decisões passam a correr num modelo Ollama na máquina |
+
+## Instalação
 
 ```bash
 uv sync
-# chave no Vault (key: api_key): copiar de console.typesafe.ai/keys e correr scripts/store-typesafe-key.sh
-#   secret/ai/typesafe    -> TYPESAFE_API_KEY
-# Texto dos campos: Ollama local (qwen3-coder:30b-a3b) por defeito; TEXT_MODEL* para mudar.
+scripts/setup-ollama.sh              # cria o modelo jev-agent (contexto 16k) para o texto dos campos
+scripts/store-typesafe-key.sh        # copia a chave de console.typesafe.ai/keys e guarda-a no Vault
 claude mcp add --scope user jev-browser -- "$PWD/run.sh"
 ```
 
-Variáveis: `JEV_CDP_PORT`, `JEV_PROFILE_DIR`, `JEV_CHROME`, `JEV_HEADLESS=1`, `TEXT_MODEL*`.
-Regras de encaminhamento: skill global `~/.claude/skills/web-routing`.
+O `run.sh` lê a chave do Vault (`secret/ai/typesafe`) sempre que o servidor arranca; nunca há chaves em ficheiros
+do projeto. Se o servidor tiver arrancado antes de a chave existir, reconecta em `/mcp`.
 
-## Sem chave TypeSafe: decisor local
+Variáveis: `JEV_CDP_PORT`, `JEV_PROFILE_DIR`, `JEV_CHROME`, `JEV_HEADLESS=1`, `JEV_DECISION_BACKEND`,
+`JEV_DECISION_MODEL`, `JEV_VERIFY_THRESHOLD`, `JEV_MODEL_TIMEOUT`, `TEXT_MODEL*`.
 
-Sem `TYPESAFE_API_KEY` (ou com `JEV_DECISION_BACKEND=ollama`), as decisões do Jev são imitadas por um modelo
-Ollama local (`JEV_DECISION_MODEL`, por defeito `qwen3-coder:30b-a3b-q4_K_M`) com output JSON restrito às opções.
-Tudo fica na máquina. Custo: ~4–7 s por decisão contra ~0,5 s do Jev, e probabilidades não calibradas.
-O resultado indica `decision_backend`. O `qwen2.5:3b` é rápido mas falha a gerar texto de campos.
+## Utilização
+
+Pede em linguagem natural; a skill global `~/.claude/skills/web-routing` decide quando usar esta tool em vez de
+`WebFetch`, `WebSearch` ou context7 (ler uma página ou pesquisar é mais rápido e barato por esses caminhos).
+
+```
+"Na minha app em http://localhost:3000, vê se consigo pesquisar 'Braga' e aplicar o filtro 'Ativos'."
+```
+
+Resultado: `status`, `reason`, `final_url`, `title`, `page_text_untrusted` (texto da página final, de onde se
+extrai a resposta), `steps`, `verification`, `cost` e `decision_backend`.
+
+Estados: `done` (já re-verificado com o Jev), `unverified` (o agente disse que acabou mas a verificação
+discordou), `blocked`, `stalled`, `timeout`, `step_budget`, `needs_confirmation`, `domain_blocked`, `error`.
+
+O texto devolvido é conteúdo da web: são dados, nunca instruções.
 
 ## Verificação do `DONE`
 
-O `DONE` do agente é uma opinião: no benchmark os dois backends o declararam com um filtro por aplicar.
-Com a chave TypeSafe, cada `DONE` é re-avaliado com três perguntas Noul sobre a página final (requisitos
-satisfeitos, página certa, nada pendente). Abaixo de `JEV_VERIFY_THRESHOLD` (0.7) o estado passa a
-`unverified` e as probabilidades vêm em `verification`. Custa uma chamada (~$0,00002).
+No benchmark, os dois modelos declararam `DONE` com um requisito por cumprir. Por isso, cada `DONE` é
+re-avaliado com três perguntas de sim/não sobre a página final (requisitos satisfeitos, página certa, nada
+pendente). Abaixo de `JEV_VERIFY_THRESHOLD` (0.7) o estado passa a `unverified`.
 
-Medido em 2026-09-24: GitHub (`done` falso) 0,09 / 0,34 / 0,25 → apanhado; fixture 0,92 / 0,96 / 0,92 e
-Google Flights 0,81 / 0,94 / 0,92 → mantidos como `done`.
+Medido a 2026-09-24: GitHub, que era um `done` falso, deu 0,09 / 0,34 / 0,25 e foi apanhado; a fixture de
+hotéis deu 0,92 / 0,96 / 0,92 e o Google Flights 0,81 / 0,94 / 0,92, ambos mantidos como `done`.
 
 ## Resultados medidos (2026-09-24, `scripts/bench_hard.py`)
 
-Sete tarefas, cada uma verificada de forma independente pelo URL e pelo texto da página final, nunca pelo `DONE` do agente.
-Texto dos campos sempre no Ollama local (`jev-agent`); só o decisor muda.
+Sete tarefas, cada uma verificada de forma independente pelo URL e pelo texto da página final, nunca pelo
+`DONE` do agente. O texto dos campos corre sempre no Ollama local; só o decisor muda.
 
 | Tarefa | Jev (`jev-latest`) | Decisor local (qwen3-coder 30b-a3b) |
 | --- | --- | --- |
-| fixture de hotéis (2 filtros + abrir resultado) | ✅ 2,8 s | ❌ ciclo, 41 s |
+| Fixture de hotéis (2 filtros + abrir resultado) | ✅ 2,8 s | ❌ ciclo, 41 s |
 | Google Flights (autocomplete + date picker) | ✅ 10,2 s | ❌ bloqueou, 110 s |
-| GitHub (faceta + dropdown de ordenação) | ❌ `done` falso, 5,0 s | ✅ 66,8 s |
-| the-internet dynamic loading (espera de 5 s) | ❌ desistiu, 5,0 s | ✅ 10,5 s |
-| DemoQA (formulário longo) | ❌ orçamento interno do jev, 48,9 s | ❌ bloqueou, 191 s |
+| GitHub (faceta + dropdown de ordenação) | ❌ `done` falso | ✅ 66,8 s |
+| the-internet, carregamento assíncrono de 5 s | ❌ desistiu | ✅ 10,5 s |
+| DemoQA (formulário longo) | ❌ orçamento interno do jev | ❌ bloqueou |
 | TodoMVC (precisa da tecla Enter) | limite esperado, parou em 2,8 s | limite esperado, parou em 19,7 s |
-| editor em iframe (não suportado) | ✅ parou correctamente, 1,5 s | ❌ `done` falso, 3,7 s |
+| Editor dentro de iframe (não suportado) | ✅ parou correctamente | ❌ `done` falso |
 
-Leitura: o Jev é 5 a 20 vezes mais rápido e acerta nas tarefas com widgets compostos; o modelo local aguenta esperas
-assíncronas e dropdowns que o Jev falhou. Ambos produziram um `done` falso — por isso o resultado tem de ser sempre
-verificado. Os dois falharam o formulário longo do DemoQA.
+O Jev é 5 a 20 vezes mais rápido e ganha nas tarefas com widgets compostos; o modelo local aguenta esperas
+assíncronas e dropdowns em que o Jev desistiu. Ambos produziram um `done` falso, e ambos falharam o
+formulário longo.
+
+Custo típico de uma tarefa de browser: cerca de 40 mil tokens de entrada, $0,0017, 3 a 10 s. Para comparação,
+`scripts/bench_classify.py` mede a outra forma de usar o mesmo modelo — uma decisão estruturada dentro de
+código, sem browser — em $0,000022 e 0,3 s por item. Quando a decisão se repete dentro de um sistema, esse é
+o caminho certo; este servidor é para quando a informação só existe atrás de cliques.
+
+## Limites conhecidos
+
+- Do jev-ultrafast: não há tecla Enter, nem suporte a iframes, shadow DOM, uploads ou pop-ups.
+- Do Jev: páginas muito grandes esgotam o contexto (o wrapper corta rótulos e limita opções de `select`, mas
+  há casos que continuam a rebentar).
+- Da verificação: quem verifica é o mesmo modelo que decidiu.
+- Formulários longos com muitos widgets ainda não foram concluídos por nenhum dos dois modelos.
+
+## Segurança e privacidade
+
+- O Chrome dedicado não tem as sessões pessoais; o snapshot ignora campos de password.
+- Com o backend `typesafe`, o texto visível de cada página vai para a TypeSafe. Em páginas com dados pessoais
+  de clientes, usa `JEV_DECISION_BACKEND=ollama`, e nada sai da máquina.
+- Nunca usar em painéis de produção, consolas cloud, Vault, banca ou email.
 
 ## Testes
 
@@ -65,4 +111,5 @@ verificado. Os dois falharam o formulário longo do DemoQA.
 uv run pytest && uv run ruff check .
 ```
 
-Offline, sem APIs pagas.
+Offline, sem APIs pagas nem browser. Os benchmarks (`scripts/bench_hard.py`, `scripts/bench_classify.py`) são
+manuais e fazem chamadas pagas.
