@@ -69,3 +69,35 @@ def test_install_routes_only_systemone(monkeypatch):
     assert model.post_json("https://api.typesafe.ai/v1/systemone", "k", {}) == "local"
     assert model.post_json("http://127.0.0.1:11434/v1/chat/completions", "k", {}) == "remote"
     assert calls == ["http://127.0.0.1:11434/v1/chat/completions"]
+
+
+def test_long_labels_are_capped(monkeypatch):
+    from jev_ultrafast.browser import Browser
+
+    from jev_browser_mcp import server
+
+    long_label = "1900 1901 1902 " * 500
+    actions = [
+        {"label": long_label, "kind": "click", "node": 1},
+        {"label": long_label + " → 1990", "kind": "select", "node": 2},
+        {"label": "Search", "kind": "click", "node": 3},
+    ]
+    monkeypatch.setattr(Browser, "observe", lambda self, screenshot=True: {"actions": actions})
+    server.patch_labels()
+    labels = {a["kind"]: a["label"] for a in Browser.observe(object())["actions"] if a["node"] != 3}
+    assert len(labels["click"]) == server.LABEL_MAX + 1
+    # The option must survive: it is the only thing that tells 211 identical-looking entries apart.
+    assert labels["select"].endswith(" → 1990")
+    assert len(labels["select"]) == server.LABEL_MAX + 1 + len(" → 1990")
+
+
+def test_select_options_are_capped_keeping_the_ones_named_in_the_goal():
+    from jev_browser_mcp import server
+
+    years = [{"kind": "select", "node": 7, "label": f"Year → {1900 + i}"} for i in range(120)]
+    actions = [{"kind": "click", "node": 1, "label": "Submit"}, *years]
+    kept = server.cap_options(actions, "Date of Birth 15 January 1990")
+    labels = [a["label"] for a in kept if a["kind"] == "select"]
+    assert len(labels) == server.SELECT_OPTIONS_MAX
+    assert labels[0] == "Year → 1990"
+    assert {a["label"] for a in kept if a["kind"] == "click"} == {"Submit"}

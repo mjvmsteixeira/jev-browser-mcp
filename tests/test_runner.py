@@ -55,7 +55,8 @@ class FakeAgent:
             if choice in {"DONE", "BLOCKED"}:
                 self.state["status"] = choice.lower()
                 return
-            self.state["history"].append({"step": len(self.state["history"]) + 1, "action": choice, "url": "u"})
+            step = len(self.state["history"]) + 1
+            self.state["history"].append({"step": step, "action": choice, "kind": "click", "url": "u"})
             self.state["page"] = next_page
 
     def close(self):
@@ -139,8 +140,8 @@ def test_redirect_offsite_stops_after_the_step():
 
 
 def test_step_budget():
-    script = [("e1", page(actions=[button("Next")])) for _ in range(5)]
-    agent = FakeAgent(page(actions=[button("Next")]), script)
+    script = [(f"e{i}", page(actions=[button("Next", node=i + 1)])) for i in range(1, 6)]
+    agent = FakeAgent(page(actions=[button("Next", node=1)]), script)
     result = run(agent, max_steps=3)
     assert result["status"] == "step_budget"
     assert len(result["steps"]) == 3
@@ -169,3 +170,26 @@ def test_model_errors_become_status_and_close_tab():
     assert result["status"] == "error"
     assert "401" in result["reason"]
     assert agent.closed
+
+
+def test_repeated_identical_action_stalls():
+    script = [("e1", page(actions=[button("Next")])) for _ in range(10)]
+    agent = FakeAgent(page(actions=[button("Next")]), script)
+    result = run(agent)
+    assert result["status"] == "stalled"
+    assert len(result["steps"]) == runner.STALL_REPEATS
+
+
+def h(kind, action, ms=0):
+    return {"kind": kind, "action": action, "executed_ms": ms}
+
+
+def test_stall_rules():
+    same_select = [h("select", f"Year → {1900 + i}") for i in range(4)]
+    assert runner.stalled(same_select)
+    assert not runner.stalled([h("click", f"Link {i}") for i in range(6)])
+    assert not runner.stalled([h("scroll", "Scroll down") for _ in range(10)])
+    short_waits = [h("click", "Start")] + [h("wait", "Wait", ms) for ms in range(1000, 8000, 1000)]
+    assert not runner.stalled(short_waits)
+    long_waits = [h("wait", "Wait", ms) for ms in range(0, 21000, 1000)]
+    assert runner.stalled(long_waits)
