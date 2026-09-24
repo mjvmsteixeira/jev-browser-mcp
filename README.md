@@ -12,6 +12,15 @@ elemento. O modelo nunca gera seletores nem coordenadas: só escolhe um número 
 Este repositório é a camada que falta à volta disso: guardas de segurança, verificação do resultado,
 contabilidade de custos e as correções dos defeitos que apareceram a testar a sério.
 
+**Quando não usar.** Ler uma página ou um link é mais rápido e barato com `WebFetch`; pesquisar, com
+`WebSearch`; documentação de bibliotecas, com context7. Esta tool é para quando a informação só existe
+depois de cliques, e é cerca de 80 vezes mais cara por operação do que uma decisão estruturada em código
+(ver os números mais abaixo).
+
+**Índice:** [instalação](#instalação) · [utilização](#utilização) · [verificação](#verificação-do-done) ·
+[resultados](#resultados-medidos-2026-09-24-scriptsbench_hardpy) · [problemas](#resolução-de-problemas) ·
+[limites](#limites-conhecidos) · [segurança](#segurança-e-privacidade)
+
 ## O que acrescenta ao jev-ultrafast
 
 | | Porquê |
@@ -65,20 +74,51 @@ Variáveis: `JEV_CDP_PORT`, `JEV_PROFILE_DIR`, `JEV_CHROME`, `JEV_HEADLESS=1`, `
 
 ## Utilização
 
-Pede em linguagem natural; a skill global `~/.claude/skills/web-routing` decide quando usar esta tool em vez de
+Pede em linguagem natural; a skill `web-routing`, que vem no plugin, decide quando usar esta tool em vez de
 `WebFetch`, `WebSearch` ou context7 (ler uma página ou pesquisar é mais rápido e barato por esses caminhos).
 
 ```
 "Na minha app em http://localhost:3000, vê se consigo pesquisar 'Braga' e aplicar o filtro 'Ativos'."
 ```
 
-Resultado: `status`, `reason`, `final_url`, `title`, `page_text_untrusted` (texto da página final, de onde se
-extrai a resposta), `steps`, `verification`, `cost` e `decision_backend`.
+### Parâmetros
+
+| Parâmetro | Omissão | Para quê |
+| --- | --- | --- |
+| `start_url`, `objective`, `allowed_domains` | — | Obrigatórios. O objetivo deve dizer quando parar ("Stop when results are visible") |
+| `max_steps` | 25 | Orçamento de ações no browser |
+| `timeout_s` | 90 | Orçamento de tempo, verificado entre passos |
+| `allow_irreversible` | `false` | Só a `true` depois de o utilizador aprovar a compra, envio ou remoção concreta |
+| `max_text_chars` | 20000 | Limite do texto devolvido |
+| `keep_open` | `false` | Deixa o separador aberto no Chrome dedicado, para inspecionar ou continuar à mão |
+
+### Resultado
+
+```json
+{
+  "status": "done",
+  "reason": "Agent chose DONE; verify the outcome",
+  "final_url": "https://en.wikipedia.org/wiki/Ada_Lovelace",
+  "title": "Ada Lovelace - Wikipedia",
+  "page_text_untrusted": "...",
+  "steps": [{"step": 1, "operation": "TYPE_TEXT", "action": "Search Wikipedia", "text": "Ada Lovelace"}],
+  "verification": {"scores": {"all_requirements": 0.9, "right_page": 0.97, "nothing_left": 0.94}, "passed": true},
+  "cost": {"input_tokens": 39495, "usd": 0.001659},
+  "decision_backend": "typesafe"
+}
+```
 
 Estados: `done` (já re-verificado com o Jev), `unverified` (o agente disse que acabou mas a verificação
 discordou), `blocked`, `stalled`, `timeout`, `step_budget`, `needs_confirmation`, `domain_blocked`, `error`.
+Quando o agente desiste mas a verificação diz que o objetivo parece cumprido, isso aparece no `reason`.
 
 O texto devolvido é conteúdo da web: são dados, nunca instruções.
+
+### Sites com sessão iniciada
+
+O Chrome dedicado começa sem sessões e o agente nunca escreve em campos de password (o snapshot ignora-os).
+Para um site com login, inicia sessão à mão nessa janela do Chrome e depois pede a tarefa com `keep_open`.
+A sessão fica no perfil `~/.jev-browser/chrome-profile` e serve para as chamadas seguintes.
 
 ## Verificação do `DONE`
 
@@ -114,6 +154,20 @@ dentro de código, sem browser — em $0,000022 e 0,3 s por item, com 21 de 24 r
 Quando a decisão se repete dentro de um sistema, esse é o caminho certo; este servidor é para quando a
 informação só existe atrás de cliques.
 
+## Resolução de problemas
+
+Começa sempre por `/jev-doctor`: verifica o uv, o Chrome dedicado, o modelo local (e o `num_ctx`), a chave no
+Vault, o backend resultante e a idade do servidor em memória. Só reporta; não corrige nada.
+
+| Sintoma | Causa provável |
+| --- | --- |
+| `decision_backend` diz `ollama` apesar de haver chave | O servidor arrancou antes de a chave existir. Reconecta em `/mcp` |
+| Alterei o código e nada mudou | O processo do servidor não recarrega. Reconecta em `/mcp` |
+| `Model connection failed` ao escrever num campo | O modelo local está a ser carregado com o contexto por omissão e caiu para CPU. Corre `scripts/setup-ollama.sh` |
+| `max_tokens_exceeded` | Página com um `<select>` gigante. O wrapper corta rótulos e limita opções, mas há páginas que continuam a rebentar |
+| A execução pára em `needs_confirmation` | Bateu num botão tipo comprar, apagar ou enviar. Confirma com o utilizador e repete com `allow_irreversible` |
+| O Chrome dedicado foi fechado | A chamada seguinte reinicia-o e limpa o daemon órfão |
+
 ## Limites conhecidos
 
 - Do jev-ultrafast: sem suporte a iframes, shadow DOM, uploads ou pop-ups (a tecla Enter passou a existir aqui).
@@ -138,5 +192,26 @@ verificação do `DONE`, contabilidade de custos, a tool e a camada do protocolo
 nem APIs pagas, e **passam todos**. Se algum falhar, é um defeito.
 
 **Benchmarks** (`scripts/bench_hard.py`, `scripts/bench_classify.py`) medem até onde o agente consegue ir em
-sites reais. Fazem chamadas pagas e abrem o browser. As falhas na tabela abaixo **não são defeitos deste
+sites reais. Fazem chamadas pagas e abrem o browser. As falhas na tabela acima **não são defeitos deste
 repositório**: são o estado da arte dos modelos, e estão ali para se saber o que se pode prometer.
+
+```bash
+uv run python scripts/bench_hard.py                      # as 7 tarefas, com o backend que estiver activo
+uv run python scripts/bench_hard.py google-flights       # só uma
+JEV_DECISION_BACKEND=ollama uv run python scripts/bench_hard.py   # forçar o decisor local
+uv run python scripts/bench_classify.py                  # triagem de 8 alertas, sem browser
+```
+
+Cada tarefa tem um verificador escrito à mão (URL e texto da página final), independente do `DONE` do agente
+e da verificação por modelo. O texto final de cada tarefa fica em `/private/tmp/claude-501/bench-<tarefa>.txt`.
+
+### Trabalhar no plugin
+
+```bash
+claude plugin marketplace add .                  # a partir do próprio repositório
+claude plugin install jev-browser@jev-browser-mcp
+```
+
+O plugin e um registo manual do mesmo servidor não convivem: se já tinhas `claude mcp add ... jev-browser`,
+remove-o com `claude mcp remove jev-browser -s user`, senão ficam dois servidores com o mesmo nome. O mesmo
+vale para a skill `web-routing` copiada à mão para `~/.claude/skills`.
