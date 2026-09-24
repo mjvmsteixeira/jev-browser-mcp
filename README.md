@@ -20,6 +20,8 @@ contabilidade de custos e as correções dos defeitos que apareceram a testar a 
 | **Paragem antes de ações irreversíveis** | Comprar, apagar, enviar, reservar e semelhantes (PT e EN) devolvem `needs_confirmation` em vez de clicar |
 | **Verificação do `DONE`** | O agente afirmar que terminou não é prova. Três perguntas Noul re-avaliam a página final |
 | **Guarda de ciclos** | Pára com a mesma operação repetida 4 vezes no mesmo elemento, ou 20 s de espera seguida |
+| **Operação Enter** | O jev não tem tecla Enter, e há campos que só submetem assim. O wrapper injeta `PRESS_ENTER` |
+| **Retomas** | Se o agente desiste com a página ainda a mudar, dá-se-lhe nova oportunidade (2x); uma resposta malformada do modelo é repetida em vez de abortar a tarefa |
 | **Orçamentos** | `max_steps` e `timeout_s`, e uma execução de cada vez |
 | **Chrome dedicado** | Porta 9333, perfil próprio, sem as sessões pessoais; telemetria do browser-harness desligada |
 | **Custo por tarefa** | Tokens de entrada e dólares em cada resultado |
@@ -73,29 +75,31 @@ Sete tarefas, cada uma verificada de forma independente pelo URL e pelo texto da
 
 | Tarefa | Jev (`jev-latest`) | Decisor local (qwen3-coder 30b-a3b) |
 | --- | --- | --- |
-| Fixture de hotéis (2 filtros + abrir resultado) | ✅ 2,8 s | ❌ ciclo, 41 s |
-| Google Flights (autocomplete + date picker) | ✅ 10,2 s | ❌ bloqueou, 110 s |
-| GitHub (faceta + dropdown de ordenação) | ❌ `done` falso | ✅ 66,8 s |
-| the-internet, carregamento assíncrono de 5 s | ❌ desistiu | ✅ 10,5 s |
-| DemoQA (formulário longo) | ❌ orçamento interno do jev | ❌ bloqueou |
-| TodoMVC (precisa da tecla Enter) | limite esperado, parou em 2,8 s | limite esperado, parou em 19,7 s |
-| Editor dentro de iframe (não suportado) | ✅ parou correctamente | ❌ `done` falso |
+| Fixture de hotéis (2 filtros + abrir resultado) | ✅ 3,7 s | ❌ ciclo detetado, 15 s |
+| Google Flights (autocomplete + date picker) | ✅ 8,4 s | ❌ bloqueou, 48 s |
+| GitHub (faceta + dropdown de ordenação) | ✅ 4,8 s | ❌ bloqueou, 21 s |
+| the-internet, carregamento assíncrono de 5 s | ⚠️ objetivo cumprido, mas o agente deu-se por vencido | ✅ 7,1 s |
+| TodoMVC (só submete com Enter) | ⚠️ criou os todos e filtrou; não completou um deles | ❌ ciclo detetado, 18 s |
+| DemoQA (formulário longo) | ❌ esgotou o orçamento interno do jev (120 chamadas) | ❌ idem, 120 s |
+| Editor dentro de iframe (não suportado) | ✅ parou correctamente, 3,4 s | ❌ `done` falso |
 
-O Jev é 5 a 20 vezes mais rápido e ganha nas tarefas com widgets compostos; o modelo local aguenta esperas
-assíncronas e dropdowns em que o Jev desistiu. Ambos produziram um `done` falso, e ambos falharam o
-formulário longo.
+O Jev resolve 3 das 5 tarefas reais e chega ao objetivo numa quarta sem o reconhecer; é 5 a 10 vezes mais
+rápido que o modelo local. Nenhum dos dois conclui o formulário longo do DemoQA. O modelo local continua a
+ganhar nas esperas assíncronas.
 
-Custo típico de uma tarefa de browser: cerca de 40 mil tokens de entrada, $0,0017, 3 a 10 s. Para comparação,
-`scripts/bench_classify.py` mede a outra forma de usar o mesmo modelo — uma decisão estruturada dentro de
-código, sem browser — em $0,000022 e 0,3 s por item. Quando a decisão se repete dentro de um sistema, esse é
-o caminho certo; este servidor é para quando a informação só existe atrás de cliques.
+Custo típico de uma tarefa de browser: 10 a 40 mil tokens de entrada, $0,0005 a $0,0017, 3 a 10 s. Para
+comparação, `scripts/bench_classify.py` mede a outra forma de usar o mesmo modelo — uma decisão estruturada
+dentro de código, sem browser — em $0,000022 e 0,3 s por item, com 21 de 24 respostas certas em 8 alertas.
+Quando a decisão se repete dentro de um sistema, esse é o caminho certo; este servidor é para quando a
+informação só existe atrás de cliques.
 
 ## Limites conhecidos
 
-- Do jev-ultrafast: não há tecla Enter, nem suporte a iframes, shadow DOM, uploads ou pop-ups.
+- Do jev-ultrafast: sem suporte a iframes, shadow DOM, uploads ou pop-ups (a tecla Enter passou a existir aqui).
 - Do Jev: páginas muito grandes esgotam o contexto (o wrapper corta rótulos e limita opções de `select`, mas
   há casos que continuam a rebentar).
-- Da verificação: quem verifica é o mesmo modelo que decidiu.
+- Da verificação: quem verifica é o mesmo modelo que decidiu, e engana-se nos dois sentidos — no
+  carregamento assíncrono deu 0,42 a uma página que já cumpria o objetivo. É um sinal, não uma prova.
 - Formulários longos com muitos widgets ainda não foram concluídos por nenhum dos dois modelos.
 
 ## Segurança e privacidade
@@ -105,11 +109,13 @@ o caminho certo; este servidor é para quando a informação só existe atrás d
   de clientes, usa `JEV_DECISION_BACKEND=ollama`, e nada sai da máquina.
 - Nunca usar em painéis de produção, consolas cloud, Vault, banca ou email.
 
-## Testes
+## Testes e benchmarks: coisas diferentes
 
-```bash
-uv run pytest && uv run ruff check .
-```
+**Testes** (`uv run pytest && uv run ruff check .`) verificam este wrapper: guardas de domínio, paragem antes
+de ações irreversíveis, orçamentos, deteção de ciclos, corte de rótulos, limite de opções, operação Enter,
+verificação do `DONE`, contabilidade de custos, a tool e a camada do protocolo MCP. São offline, sem browser
+nem APIs pagas, e **passam todos**. Se algum falhar, é um defeito.
 
-Offline, sem APIs pagas nem browser. Os benchmarks (`scripts/bench_hard.py`, `scripts/bench_classify.py`) são
-manuais e fazem chamadas pagas.
+**Benchmarks** (`scripts/bench_hard.py`, `scripts/bench_classify.py`) medem até onde o agente consegue ir em
+sites reais. Fazem chamadas pagas e abrem o browser. As falhas na tabela abaixo **não são defeitos deste
+repositório**: são o estado da arte dos modelos, e estão ali para se saber o que se pode prometer.

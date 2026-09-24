@@ -15,6 +15,9 @@ IRREVERSIBLE = re.compile(
     re.IGNORECASE,
 )
 PRICE_PER_MTOK = float(os.environ.get("JEV_PRICE_PER_MTOK", "0.042"))  # docs.typesafe.ai/models
+BLOCKED_RETRIES = 2
+INVALID_RETRIES = 2
+BLOCKED_WAIT_S = 1.5
 STALL_REPEATS = 4
 WAIT_STALL_MS = 20000
 PAGE_TEXT = "document.body ? document.body.innerText.slice(0, {limit}) : ''"
@@ -103,14 +106,30 @@ def run_task(
     agent = agent_factory(start_url, objective)
     state = agent.state
     status, reason = None, None
+    blocked_retries = 0
+    invalid_retries = 0
     try:
         while True:
             if not host_allowed(state["page"]["url"], domains):
                 status, reason = "domain_blocked", f"Navigated outside allowed_domains: {state['page']['url']}"
                 break
+            if state["status"] == "blocked" and blocked_retries < BLOCKED_RETRIES:
+                # Jev gives up on content that is still arriving (measured: a 5s async load).
+                # Give it another look only if the page actually changed while we waited.
+                blocked_retries += 1
+                time.sleep(BLOCKED_WAIT_S)
+                before = state["page"]["fingerprint"]
+                state["page"] = agent.browser.observe(screenshot=False)
+                if state["page"]["fingerprint"] != before:
+                    state["status"], state["decision"] = "ready", None
+                    continue
             if state["status"] in {"done", "blocked"}:
                 status = state["status"]
-                reason = "Agent chose DONE; verify the outcome" if status == "done" else "Agent could not progress"
+                reason = (
+                    "Agent chose DONE; verify the outcome"
+                    if status == "done"
+                    else f"Agent could not progress (retried {blocked_retries}x while the page changed)"
+                )
                 break
             if time.monotonic() - started > timeout_s:
                 status, reason = "timeout", f"Stopped after {timeout_s}s"
@@ -138,6 +157,11 @@ def run_task(
                 state["status"] = "ready"
                 state["page"] = agent.browser.observe(screenshot=False)
             except (ValueError, RuntimeError) as error:
+                # A malformed answer is transient; one of them should not end the whole task.
+                if "Invalid TypeSafe response" in str(error) and invalid_retries < INVALID_RETRIES:
+                    invalid_retries += 1
+                    state["decision"] = None
+                    continue
                 status, reason = "error", str(error)
                 break
         page = state["page"]
@@ -145,12 +169,13 @@ def run_task(
             text = agent.browser.evaluate(PAGE_TEXT.format(limit=int(max_text_chars)))
         except Exception:
             text = page.get("text", "")
-        verification = None
-        if status == "done" and verifier:
-            verification = verifier(objective, page["url"], page["title"], text)
-            if verification and verification.get("passed") is False:
-                status = "unverified"
-                reason = f"Agent chose DONE but the check failed on: {', '.join(verification['failed'])}"
+        verification = verifier(objective, page["url"], page["title"], text) if verifier else None
+        if verification and verification.get("passed") is False and status == "done":
+            status = "unverified"
+            reason = f"Agent chose DONE but the check failed on: {', '.join(verification['failed'])}"
+        elif verification and verification.get("passed") and status != "done":
+            # Measured: the agent gave up on a page that already satisfied the goal.
+            reason = f"{reason}; the check says the goal appears satisfied"
         return {
             "status": status,
             "reason": reason,

@@ -19,7 +19,12 @@ build-backend = "hatchling.build"
 allow-direct-references = true
 
 [dependency-groups]
-dev = ["pytest>=8.4,<9", "ruff>=0.14,<1"]
+dev = [
+    "anyio>=4.15.1",
+    "pytest>=8.4,<9",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.14,<1",
+]
 
 [tool.ruff]
 line-length = 120

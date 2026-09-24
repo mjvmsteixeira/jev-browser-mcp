@@ -77,6 +77,7 @@ def ensure_chrome():
     raise RuntimeError(f"Dedicated Chrome did not expose CDP on port {CDP_PORT}")
 
 
+ENTER = {"id": "press_enter", "kind": "key", "label": "Press Enter in the field just typed into (submits it)"}
 LABEL_MAX = 80
 SELECT_OPTIONS_MAX = 40
 OBJECTIVE = ""
@@ -120,10 +121,43 @@ def patch_labels():
             if len(name) > LABEL_MAX:
                 action["label"] = name[:LABEL_MAX] + "…" + sep + option
         page["actions"] = cap_options(page["actions"], OBJECTIVE)
+        # jev has no key operation, so a search box that only submits on Enter is a dead end.
+        if any(action["kind"] == "fill" for action in page["actions"]):
+            page["actions"].append(dict(ENTER))
         return page
 
     observe.label_capped = True
     Browser.observe = observe
+
+
+def patch_enter():
+    """Execute the synthetic Enter action; jev's executor only knows clicks, typing and selects."""
+    from jev_ultrafast.browser import Browser, StalePage
+
+    if getattr(Browser.act, "enter_enabled", False):
+        return
+    original = Browser.act
+
+    def act(self, action, page, text=None):
+        if action.get("kind") != "key":
+            return original(self, action, page, text=text)
+        if not self.fresh(page):
+            raise StalePage("Page changed since this decision. Observe again.")
+        for event, sent in (("keyDown", "\r"), ("keyUp", "")):
+            self.call(
+                "Input.dispatchKeyEvent",
+                type=event,
+                key="Enter",
+                code="Enter",
+                windowsVirtualKeyCode=13,
+                nativeVirtualKeyCode=13,
+                text=sent,
+            )
+        self.after_input = None
+        return {"executed": action["id"]}
+
+    act.enter_enabled = True
+    Browser.act = act
 
 
 def prepare_models():
@@ -132,6 +166,7 @@ def prepare_models():
     from jev_ultrafast import model
 
     patch_labels()
+    patch_enter()
 
     model.CLIENT = httpx.Client(http2=True, timeout=float(os.environ.get("JEV_MODEL_TIMEOUT", "90")))
     base = os.environ.get("TEXT_MODEL_BASE_URL", "")

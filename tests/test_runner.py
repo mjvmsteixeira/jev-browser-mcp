@@ -193,3 +193,52 @@ def test_stall_rules():
     assert not runner.stalled(short_waits)
     long_waits = [h("wait", "Wait", ms) for ms in range(0, 21000, 1000)]
     assert runner.stalled(long_waits)
+
+
+def loading(agent, pages):
+    """The agent gives up; the browser then reports a page that is still changing."""
+    agent.browser.pages = pages
+    return agent
+
+
+def test_blocked_is_retried_while_the_page_keeps_changing(monkeypatch):
+    monkeypatch.setattr(runner.time, "sleep", lambda _s: None)
+    agent = FakeAgent(page(), [("BLOCKED", None), ("e1", page()), ("DONE", None)])
+    agent.state["page"]["actions"] = [button("Start")]
+    loading(agent, [page(url="https://shop.test/?loaded")])
+    result = run(agent)
+    assert result["status"] == "done"
+    assert agent.acted == ["BLOCKED", "e1", "DONE"]
+
+
+def test_blocked_stands_when_the_page_is_static(monkeypatch):
+    monkeypatch.setattr(runner.time, "sleep", lambda _s: None)
+    agent = FakeAgent(page(), [("BLOCKED", None)])
+    loading(agent, [page(), page()])
+    result = run(agent)
+    assert result["status"] == "blocked"
+    assert "retried" in result["reason"]
+
+
+def test_a_malformed_model_answer_is_retried_not_fatal():
+    agent = FakeAgent(page(actions=[button("Next")]), [("e1", page()), ("DONE", None)])
+    original = agent.command
+    calls = {"n": 0}
+
+    def flaky(name, body=None):
+        calls["n"] += 1
+        if name == "predict" and calls["n"] == 1:
+            raise ValueError("Invalid TypeSafe response; no action executed.")
+        return original(name, body)
+
+    agent.command = flaky
+    assert run(agent)["status"] == "done"
+
+
+def test_repeated_malformed_answers_still_stop():
+    agent = FakeAgent(page(actions=[button("Next")]), [("e1", page())])
+    agent.command = lambda name, body=None: (_ for _ in ()).throw(
+        ValueError("Invalid TypeSafe response; no action executed.")
+    )
+    result = run(agent)
+    assert result["status"] == "error" and "Invalid TypeSafe" in result["reason"]

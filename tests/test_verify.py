@@ -97,3 +97,14 @@ def test_backend_reads_the_key_from_vault_when_missing(monkeypatch, tmp_path):
     monkeypatch.setattr(server, "VAULT_READ", str(reader))
     assert server.backend() == "typesafe"
     assert os.environ["TYPESAFE_API_KEY"] == "apikey_from_vault"
+
+
+def test_a_passing_check_flags_a_goal_reached_after_the_agent_gave_up(monkeypatch):
+    from tests.test_runner import FakeAgent, page, run
+
+    monkeypatch.setattr(runner.time, "sleep", lambda _s: None)
+    agent = FakeAgent(page(), [("BLOCKED", None)])
+    agent.browser.pages = [page(), page()]  # unchanged: the retry must not revive the run
+    result = run(agent, verifier=lambda *a: {"passed": True, "failed": [], "scores": {"all_requirements": 0.9}})
+    assert result["status"] == "blocked"
+    assert "appears satisfied" in result["reason"]

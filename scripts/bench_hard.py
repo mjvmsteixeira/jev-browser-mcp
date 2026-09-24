@@ -13,7 +13,7 @@ import threading
 import unicodedata
 from pathlib import Path
 
-from jev_browser_mcp import server
+from jev_browser_mcp import local_decider, server
 from jev_browser_mcp.runner import run_task
 from jev_browser_mcp.server import backend, ensure_chrome, make_agent, prepare_models
 from jev_browser_mcp.verify import verify
@@ -92,11 +92,12 @@ TASKS = [
     ),
     dict(
         name="todomvc-enter",
-        kind="LIMIT probe: needs the Enter key (no such operation)",
+        kind="needs the Enter key (added by the wrapper as PRESS_ENTER)",
         start_url="https://todomvc.com/examples/react/dist/",
         allowed_domains=["todomvc.com"],
         objective="Add the todos 'milk' and 'eggs', mark 'eggs' as completed, then show only Active todos.",
-        check=both(url_has("#/active"), has("milk")),
+        # milk stays active, eggs must be completed and therefore hidden by the Active filter.
+        check=both(url_has("#/active"), has("milk"), lambda r: "eggs" not in plain(r.get("page_text_untrusted"))),
     ),
     dict(
         name="iframe-editor",
@@ -122,6 +123,8 @@ def serve_fixture():
 def main():
     global BACKEND
     BACKEND = backend()
+    if BACKEND == "ollama":
+        local_decider.install()
     wanted = set(sys.argv[1:])
     serve_fixture()
     ensure_chrome()
