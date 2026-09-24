@@ -1,0 +1,8 @@
+{
+  "name": "jev-browser",
+  "description": "Agente de browser (jev-ultrafast + Jev da TypeSafe) exposto ao Claude Code como uma tool com guardas: lista de domínios, paragem antes de ações irreversíveis, orçamentos, deteção de ciclos, operação Enter e re-verificação do DONE.",
+  "version": "0.1.0",
+  "author": { "name": "mjvmsteixeira" },
+  "license": "MIT",
+  "keywords": ["browser", "automation", "mcp", "jev", "typesafe"]
+}

@@ -1,0 +1,15 @@
+{
+  "name": "jev-browser-mcp",
+  "description": "Agente de browser para o Claude Code, com guardas e verificação do resultado.",
+  "owner": {
+    "name": "mjvmsteixeira",
+    "url": "https://github.com/mjvmsteixeira"
+  },
+  "plugins": [
+    {
+      "name": "jev-browser",
+      "description": "Servidor MCP (jev-ultrafast) com guardas de domínio, paragem antes de ações irreversíveis, verificação do DONE e custo por tarefa. Inclui a skill de encaminhamento web e o comando /jev-doctor.",
+      "source": "./claude"
+    }
+  ]
+}

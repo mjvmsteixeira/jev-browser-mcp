@@ -29,11 +29,32 @@ contabilidade de custos e as correções dos defeitos que apareceram a testar a 
 
 ## Instalação
 
+Como plugin (traz o servidor, a skill de encaminhamento e o comando `/jev-doctor`):
+
 ```bash
-uv sync
+claude plugin marketplace add mjvmsteixeira/jev-browser-mcp
+claude plugin install jev-browser@jev-browser-mcp
+```
+
+Depois, uma vez por máquina:
+
+```bash
 scripts/setup-ollama.sh              # cria o modelo jev-agent (contexto 16k) para o texto dos campos
 scripts/store-typesafe-key.sh        # copia a chave de console.typesafe.ai/keys e guarda-a no Vault
-claude mcp add --scope user jev-browser -- "$PWD/run.sh"
+```
+
+`/jev-doctor` diz o que falta. As dependências Python são instaladas pelo `uv run` na primeira chamada.
+Sem plugin, o servidor regista-se à mão com `claude mcp add --scope user jev-browser -- "$PWD/run.sh"`,
+mas aí a skill fica por instalar.
+
+### O que o plugin contém
+
+```
+.claude-plugin/marketplace.json   este repositório como marketplace
+claude/.claude-plugin/plugin.json manifesto do plugin
+claude/.mcp.json                  servidor jev-browser -> run.sh
+claude/skills/web-routing/        quando usar esta tool em vez de WebFetch/WebSearch/context7
+claude/commands/jev-doctor.md     diagnóstico (Chrome, Ollama, chave, servidor em memória)
 ```
 
 O `run.sh` lê a chave do Vault (`secret/ai/typesafe`) sempre que o servidor arranca; nunca há chaves em ficheiros
