@@ -57,10 +57,22 @@ fi
 
 pid=$(pgrep -f "jev-browser-mcp" | head -1)
 if [ -n "$pid" ]; then
-  started=$(ps -p "$pid" -o lstart= 2>/dev/null)
-  changed=$(cd "$ROOT" && git log -1 --format=%cd --date=local 2>/dev/null)
-  say OK servidor "a correr (pid $pid, desde $started); último commit: $changed"
-  say AVISO servidor "se mexeste no código ou nos segredos depois disso, reconecta em /mcp — o processo não recarrega"
+  # lstart vem no idioma do sistema e o date do macOS não o reconhece; etime é imune a isso.
+  started_at=$(ps -p "$pid" -o etime= | python3 -c '
+import sys, time
+raw = sys.stdin.read().strip()
+days, _, rest = raw.partition("-")
+if not rest:
+    days, rest = "0", raw
+parts = [int(x) for x in rest.split(":")]
+elapsed = int(days) * 86400 + sum(p * 60**i for i, p in enumerate(reversed(parts)))
+print(int(time.time()) - elapsed)' 2>/dev/null)
+  commit_at=$(cd "$ROOT" && git log -1 --format=%ct 2>/dev/null)
+  if [ -n "$started_at" ] && [ -n "$commit_at" ] && [ "$started_at" -lt "$commit_at" ] 2>/dev/null; then
+    say AVISO servidor "o processo (pid $pid) arrancou antes do último commit ($(date -r "$commit_at" "+%d/%m %H:%M")); reconecta em /mcp, porque não recarrega código nem segredos"
+  else
+    say OK servidor "a correr (pid $pid), mais recente que o último commit"
+  fi
 else
-  say OK servidor "nenhum processo antigo em memória"
+  say OK servidor "nenhum processo em memória; arranca na próxima chamada"
 fi
