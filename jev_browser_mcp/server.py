@@ -217,8 +217,8 @@ def browse_interactive(
 ) -> dict:
     """Drive a real browser through a multi-step INTERACTIVE task (forms, filters, autocomplete,
     date pickers, SPAs) with the jev-ultrafast agent. Seconds per task, not milliseconds.
-    With decision_backend "ollama" (no TypeSafe key) each step takes ~2-4 s and decisions are
-    less reliable than Jev; verify outcomes carefully.
+    With decision_backend "ollama" (no TypeSafe key) each step takes ~2-13 s (heavier pages are
+    slower) and decisions are less reliable than Jev; verify outcomes carefully.
 
     Do NOT use to read a static page or a link (use WebFetch), to search the web (use WebSearch),
     or for library docs (use context7).
