@@ -2,8 +2,8 @@
 
 *[Versão em português](PRO.pt.md)*
 
-This repository is free and MIT-licensed, and it stays that way. **Jev Browser Pro** is a paid skill that works with
-the free plugin, for one job the free plugin does not do: **regression-testing your own web app** before every merge.
+This repository is free and MIT-licensed, and it stays that way. **Jev Browser Pro** is a paid package built on top of
+it, for one job the free plugin does not do: **regression-testing your own web app** before every merge.
 
 ## What Pro adds
 
@@ -42,26 +42,28 @@ expect_no_text = ["Booking confirmed"]
   into your project. Exit code 0 or 1, with Markdown and JSON reports.
 - **A skill** that teaches your agent to write flows for your app and to read every result.
 - **A demo site and example flow** that run in under a minute, recipes and troubleshooting.
+- **The browser server included**: this repository's MIT code is bundled, with a step-by-step setup guide, so Pro
+  works on its own.
 
 ## Free vs Pro
 
 | | Free (this repository) | Pro |
 | --- | --- | --- |
-| `browse_interactive`: domain allowlist, stop before irreversible clicks, `DONE` re-check, budgets | Yes | Yes, from the free plugin |
+| `browse_interactive`: domain allowlist, stop before irreversible clicks, `DONE` re-check, budgets | Yes | Yes, the same code, bundled |
 | QA flows in TOML, checked by your own rules | No | Yes |
 | Flow runner for the agent, the shell and CI | No | Yes |
 | Markdown and JSON reports | No | Yes |
 | Demo site and example flow | No | Yes |
-| Agents | Claude Code | Claude Code |
-| Install | `/plugin install` | The free plugin, plus the Pro skill from Agensi |
-| Licence | MIT | Proprietary |
+| Agents | Claude Code | Claude Code (other stdio MCP agents untested) |
+| Install | `/plugin install` | A zip from Agensi, set up by hand from its `SETUP.md` |
+| Licence | MIT | Pro content proprietary; bundled server MIT |
 | Price | Free | One-time purchase |
 
 **Which one do I need?** To let Claude Code fill forms and click through sites while you work, the free plugin is
 enough. To check that a journey on your app still works after each change, without writing selectors, get Pro.
 
-Pro is not a second browser server: it needs the free plugin installed, and uses its `browse_interactive` tool for
-every step.
+You don't need both. Pro includes the browser server; if you already have the free plugin, Pro's flow runner uses it
+instead.
 
 ## How to get Pro
 

@@ -2,8 +2,8 @@
 
 *[English version](PRO.md)*
 
-Este repositório é gratuito e tem licença MIT, e assim continua. O **Jev Browser Pro** é uma skill paga que funciona
-com o plugin gratuito, para uma tarefa que o plugin gratuito não faz: **testes de regressão à tua própria aplicação web** antes de
+Este repositório é gratuito e tem licença MIT, e assim continua. O **Jev Browser Pro** é um pacote pago construído
+por cima dele, para uma tarefa que o plugin gratuito não faz: **testes de regressão à tua própria aplicação web** antes de
 cada merge.
 
 ## O que o Pro acrescenta
@@ -44,27 +44,29 @@ expect_no_text = ["Booking confirmed"]
 - **Uma skill** que ensina o agente a escrever flows para a tua aplicação e a ler cada resultado.
 - **Um site de demonstração e um flow de exemplo** que correm em menos de um minuto, receitas e resolução de
   problemas.
+- **O servidor de browser incluído**: o código MIT deste repositório vem no pacote, com um guia de configuração passo
+  a passo, por isso o Pro funciona sozinho.
 
 ## Gratuito vs Pro
 
 | | Gratuito (este repositório) | Pro |
 | --- | --- | --- |
-| `browse_interactive`: lista de domínios, paragem antes de cliques irreversíveis, reverificação do `DONE`, limites | Sim | Sim, a partir do plugin gratuito |
+| `browse_interactive`: lista de domínios, paragem antes de cliques irreversíveis, reverificação do `DONE`, limites | Sim | Sim, o mesmo código, incluído |
 | QA flows em TOML, verificados pelas tuas regras | Não | Sim |
 | Executor de flows para o agente, a shell e a CI | Não | Sim |
 | Relatórios em Markdown e JSON | Não | Sim |
 | Site de demonstração e flow de exemplo | Não | Sim |
-| Agentes | Claude Code | Claude Code |
-| Instalação | `/plugin install` | O plugin gratuito, mais a skill Pro da Agensi |
-| Licença | MIT | Proprietária |
+| Agentes | Claude Code | Claude Code (outros agentes MCP stdio não testados) |
+| Instalação | `/plugin install` | Um zip da Agensi, configurado à mão a partir do `SETUP.md` |
+| Licença | MIT | Conteúdo Pro proprietário; servidor incluído em MIT |
 | Preço | Gratuito | Compra única |
 
 **De qual preciso?** Para o Claude Code preencher formulários e navegar em sites enquanto trabalhas, o plugin
 gratuito chega. Para confirmar, depois de cada alteração, que um percurso da tua aplicação continua a funcionar, sem
 escrever seletores, o Pro.
 
-O Pro não é um segundo servidor de browser: precisa do plugin gratuito instalado e usa a tool `browse_interactive`
-dele em cada passo.
+Não precisas dos dois. O Pro inclui o servidor de browser; se já tiveres o plugin gratuito, o executor de flows do
+Pro usa-o.
 
 ## Como obter o Pro
 
