@@ -1,6 +1,7 @@
 """MCP server exposing jev-ultrafast as one guarded tool, on a dedicated Chrome profile."""
 
 import os
+import shutil
 import subprocess
 import sys
 import threading
@@ -16,10 +17,23 @@ from .runner import run_task
 from .verify import verify
 
 PROFILE_DIR = Path(os.environ.get("JEV_PROFILE_DIR", Path.home() / ".jev-browser" / "chrome-profile"))
-CHROME = os.environ.get("JEV_CHROME", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
+MAC_CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 
-VAULT_READ = os.environ.get("JEV_VAULT_READ", "/Users/mjvmst/vault/vault-read.sh")
-VAULT_PATH = os.environ.get("JEV_VAULT_PATH", "secret/ai/typesafe")
+
+def default_chrome():
+    if sys.platform == "darwin":
+        return MAC_CHROME
+    for name in ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser"):
+        found = shutil.which(name)
+        if found:
+            return found
+    return "google-chrome"
+
+
+CHROME = os.environ.get("JEV_CHROME") or default_chrome()
+
+VAULT_READ = os.environ.get("JEV_VAULT_READ", "")  # opt-in: run.sh sets it for a local Vault
+VAULT_PATH = os.environ.get("JEV_VAULT_PATH", "")
 
 
 def backend():
@@ -27,7 +41,7 @@ def backend():
     forced = os.environ.get("JEV_DECISION_BACKEND")
     if forced:
         return forced
-    if not os.environ.get("TYPESAFE_API_KEY") and Path(VAULT_READ).exists():
+    if not os.environ.get("TYPESAFE_API_KEY") and VAULT_READ and Path(VAULT_READ).exists():
         try:
             found = subprocess.run(
                 [VAULT_READ, VAULT_PATH, "api_key"], capture_output=True, text=True, timeout=30
