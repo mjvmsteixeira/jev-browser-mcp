@@ -33,7 +33,7 @@ def default_chrome():
 CHROME = os.environ.get("JEV_CHROME") or default_chrome()
 
 VAULT_READ = os.environ.get("JEV_VAULT_READ", "")  # opt-in: run.sh sets it for a local Vault
-VAULT_PATH = os.environ.get("JEV_VAULT_PATH", "secret/ai/typesafe")
+VAULT_PATH = os.environ.get("JEV_VAULT_PATH", "")
 
 
 def backend():
