@@ -242,3 +242,43 @@ def test_repeated_malformed_answers_still_stop():
     )
     result = run(agent)
     assert result["status"] == "error" and "Invalid TypeSafe" in result["reason"]
+
+
+ENTER = {"id": "press_enter", "kind": "key", "label": "Press Enter in the field just typed into (submits it)"}
+
+
+def field(label, node=2):
+    return {"id": f"e{node}", "kind": "fill", "label": label, "role": "textbox", "node": node}
+
+
+def scoped(node, text):
+    return {str(node): [None] * 13 + [text]}
+
+
+def test_enter_in_a_form_with_an_irreversible_action_stops_before_submitting():
+    """Enter submits the form of the field just typed into, so it must face the same guard as a click."""
+    checkout = page(actions=[field("Coupon"), ENTER], guards=scoped(2, "Coupon Apply Place order"))
+    agent = FakeAgent(checkout, [("e2", checkout), ("press_enter", page())])
+    result = run(agent)
+    assert result["status"] == "needs_confirmation"
+    assert agent.acted == ["e2"]
+
+
+def test_enter_in_a_search_form_is_executed():
+    search = page(actions=[field("Search"), ENTER], guards=scoped(2, "Search repositories"))
+    agent = FakeAgent(search, [("e2", search), ("press_enter", page()), ("DONE", page())])
+    assert run(agent)["status"] == "done"
+    assert agent.acted == ["e2", "press_enter", "DONE"]
+
+
+def test_enter_in_an_irreversible_form_runs_when_approved():
+    checkout = page(actions=[field("Coupon"), ENTER], guards=scoped(2, "Place order"))
+    agent = FakeAgent(checkout, [("e2", checkout), ("press_enter", page()), ("DONE", page())])
+    assert run(agent, allow_irreversible=True)["status"] == "done"
+
+
+def test_enter_without_a_known_field_checks_every_field_on_the_page():
+    guards = {**scoped(2, "Search"), **scoped(3, "Type DELETE to confirm. Delete repository")}
+    checkout = page(actions=[field("Search"), field("Confirm", node=3), ENTER], guards=guards)
+    assert runner.guard(ENTER, checkout, {"shop.test"}, False)[0] == "needs_confirmation"
+    assert runner.guard(ENTER, checkout, {"shop.test"}, False, last_fill=2) is None
