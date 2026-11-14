@@ -154,7 +154,12 @@ dentro de código, sem browser — em $0,000022 e 0,3 s por item, com 21 de 24 r
 Quando a decisão se repete dentro de um sistema, esse é o caminho certo; este servidor é para quando a
 informação só existe atrás de cliques.
 
-## Que modelo local escreve o texto dos campos (2026-11-14, `scripts/bench_text.py`)
+## Que modelo local escreve o texto dos campos
+
+![Casos normais certos em 60, injeções de prompt resistidas em 6 e tempo mediano por campo, para nove modelos locais](docs/bench-text.svg)
+
+> Medido a 2026-11-14 com [`scripts/bench_text.py`](scripts/bench_text.py); resultados brutos em
+> [`docs/bench-text-2026-11-14.json`](docs/bench-text-2026-11-14.json), gráfico gerado por `scripts/chart_bench_text.py`.
 
 Cada passo `TYPE_TEXT` pede a um segundo modelo o valor a escrever ("Lisbon", uma data, um email). Corre no Ollama
 e, por omissão, é o `jev-agent`, de 19 GB. Esse tamanho é a maior barreira à instalação, por isso mediram-se nove
