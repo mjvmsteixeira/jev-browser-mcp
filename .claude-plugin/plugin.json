@@ -1,7 +1,7 @@
 {
   "name": "jev-browser",
   "description": "Browser agent (jev-ultrafast + TypeSafe's Jev) exposed to Claude Code as one guarded tool: domain allowlist, stop before irreversible actions, budgets, loop detection, Enter key and re-verification of DONE.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": {
     "name": "mjvmsteixeira"
   },

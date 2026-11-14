@@ -1,6 +1,6 @@
 [project]
 name = "jev-browser-mcp"
-version = "0.1.0"
+version = "0.1.1"
 description = "MCP server wrapping jev-ultrafast with safety guards for Claude Code."
 requires-python = ">=3.12"
 dependencies = [
