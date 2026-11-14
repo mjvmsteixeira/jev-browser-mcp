@@ -1,98 +1,105 @@
 # jev-browser-mcp
 
-Servidor MCP que dá ao Claude Code um agente de browser: uma tool, `browse_interactive`, que abre um Chrome
-dedicado e executa tarefas interativas na web (preencher formulários, aplicar filtros, autocomplete, date
-pickers, SPAs).
+*[Versão em português](README.pt.md)*
 
-Por dentro usa o [jev-ultrafast](https://github.com/browser-use/jev-ultrafast) da Browser Use, que em cada
-passo lê a página, numera os elementos com que se pode interagir e pede ao modelo [Jev](https://docs.typesafe.ai)
-da TypeSafe uma operação (`CLICK`, `TYPE_TEXT`, `SELECT`, `SCROLL`, `WAIT`, `DONE`, `BLOCKED`) e o número do
-elemento. O modelo nunca gera seletores nem coordenadas: só escolhe um número de uma lista que o código lhe deu.
+An MCP server that gives Claude Code a browser agent: one tool, `browse_interactive`, that opens a dedicated Chrome
+and carries out interactive tasks on the web (filling forms, applying filters, autocomplete, date pickers, SPAs).
 
-Este repositório é a camada que falta à volta disso: guardas de segurança, verificação do resultado,
-contabilidade de custos e as correções dos defeitos que apareceram a testar a sério.
+Under the hood it uses Browser Use's [jev-ultrafast](https://github.com/browser-use/jev-ultrafast). At each step it
+reads the page, numbers the elements that can be interacted with, and asks TypeSafe's [Jev](https://docs.typesafe.ai)
+model for one operation (`CLICK`, `TYPE_TEXT`, `SELECT`, `SCROLL`, `WAIT`, `DONE`, `BLOCKED`) and an element number.
+The model never writes selectors or coordinates: it only picks a number from a list the code gave it.
 
-**Quando não usar.** Ler uma página ou um link é mais rápido e barato com `WebFetch`; pesquisar, com
-`WebSearch`; documentação de bibliotecas, com context7. Esta tool é para quando a informação só existe
-depois de cliques, e é cerca de 80 vezes mais cara por operação do que uma decisão estruturada em código
-(ver os números mais abaixo).
+This repository is the missing layer around that: safety guards, verification of the outcome, cost accounting, and
+fixes for the defects that showed up in real testing.
 
-**Índice:** [instalação](#instalação) · [utilização](#utilização) · [verificação](#verificação-do-done) ·
-[resultados](#resultados-medidos-2026-09-24-scriptsbench_hardpy) · [problemas](#resolução-de-problemas) ·
-[limites](#limites-conhecidos) · [segurança](#segurança-e-privacidade)
+**When not to use it.** Reading a page or a link is faster and cheaper with `WebFetch`; searching, with `WebSearch`;
+library documentation, with context7. This tool is for when the information only exists after clicking, and it is
+about 80 times more expensive per operation than a structured decision made in code (see the numbers below).
 
-## O que acrescenta ao jev-ultrafast
+**Contents:** [install](#install) · [usage](#usage) · [verification](#verifying-done) ·
+[results](#measured-results-2026-09-24-scriptsbench_hardpy) · [troubleshooting](#troubleshooting) ·
+[limits](#known-limits) · [security](#security-and-privacy)
 
-| | Porquê |
+## What it adds to jev-ultrafast
+
+| | Why |
 | --- | --- |
-| **Lista de domínios permitida** | Obrigatória. O URL inicial, os links clicados e as redireções fora da lista param a execução |
-| **Paragem antes de ações irreversíveis** | Comprar, apagar, enviar, reservar e semelhantes (PT e EN) devolvem `needs_confirmation` em vez de clicar |
-| **Verificação do `DONE`** | O agente afirmar que terminou não é prova. Três perguntas Noul re-avaliam a página final |
-| **Guarda de ciclos** | Pára com a mesma operação repetida 4 vezes no mesmo elemento, ou 20 s de espera seguida |
-| **Operação Enter** | O jev não tem tecla Enter, e há campos que só submetem assim. O wrapper injeta `PRESS_ENTER` |
-| **Retomas** | Se o agente desiste com a página ainda a mudar, dá-se-lhe nova oportunidade (2x); uma resposta malformada do modelo é repetida em vez de abortar a tarefa |
-| **Orçamentos** | `max_steps` e `timeout_s`, e uma execução de cada vez |
-| **Chrome dedicado** | Porta 9333, perfil próprio, sem as sessões pessoais; telemetria do browser-harness desligada |
-| **Custo por tarefa** | Tokens de entrada e dólares em cada resultado |
-| **Modo local** | Sem chave TypeSafe, as decisões passam a correr num modelo Ollama na máquina |
+| **Domain allowlist** | Mandatory. A start URL, clicked link or redirect outside the list stops the run |
+| **Stop before irreversible actions** | Buy, delete, send, book and similar (English and Portuguese) return `needs_confirmation` instead of clicking |
+| **Verification of `DONE`** | The agent saying it finished is not proof. Three Jev questions re-assess the final page |
+| **Loop guard** | Stops when the same operation hits the same element 4 times, or after 20 s of continuous waiting |
+| **Enter operation** | jev has no Enter key, and some fields only submit that way. The wrapper injects `PRESS_ENTER` |
+| **Retries** | If the agent gives up while the page is still changing, it gets another chance (2x); a malformed model reply is retried instead of aborting the task |
+| **Budgets** | `max_steps` and `timeout_s`, and one run at a time |
+| **Dedicated Chrome** | Port 9333, its own profile, none of your personal sessions; browser-harness telemetry turned off |
+| **Cost per task** | Input tokens and dollars in every result |
+| **Local mode** | Without a TypeSafe key, decisions run on an Ollama model on your machine |
 
-## Instalação
+## Install
 
-Como plugin (traz o servidor, a skill de encaminhamento e o comando `/jev-doctor`):
+As a plugin (brings the server, the routing skill and the `/jev-doctor` command):
 
 ```bash
 claude plugin marketplace add mjvmsteixeira/jev-browser-mcp
 claude plugin install jev-browser@jev-browser-mcp
 ```
 
-Depois, uma vez por máquina:
+Then, once per machine:
 
 ```bash
-scripts/setup-ollama.sh              # cria o modelo jev-agent (contexto 16k) para o texto dos campos
-scripts/store-typesafe-key.sh        # copia a chave de console.typesafe.ai/keys e guarda-a no Vault
+scripts/setup-ollama.sh              # creates the jev-agent model (16k context) that writes field text
 ```
 
-`/jev-doctor` diz o que falta. As dependências Python são instaladas pelo `uv run` na primeira chamada.
-Sem plugin, o servidor regista-se à mão com `claude mcp add --scope user jev-browser -- "$PWD/run.sh"`,
-mas aí a skill fica por instalar.
+For the fast backend, give the server a TypeSafe key (from console.typesafe.ai/keys) in one of two ways:
 
-### O que o plugin contém
+- `TYPESAFE_API_KEY` in the environment the MCP server starts with.
+- A local Vault: `run.sh` reads `secret/ai/typesafe` through `$JEV_VAULT_READ` (default `~/vault/vault-read.sh`)
+  every time the server starts, so no key ever sits in a project file. `scripts/store-typesafe-key.sh` stores it
+  there; it is written for the author's own Vault setup, so adapt it to yours.
 
-```
-.claude-plugin/marketplace.json   este repositório como marketplace
-claude/.claude-plugin/plugin.json manifesto do plugin
-claude/.mcp.json                  servidor jev-browser -> run.sh
-claude/skills/web-routing/        quando usar esta tool em vez de WebFetch/WebSearch/context7
-claude/commands/jev-doctor.md     diagnóstico (Chrome, Ollama, chave, servidor em memória)
-```
+`/jev-doctor` tells you what is missing. Python dependencies are installed by `uv run` on the first call. Without the
+plugin, register the server by hand with `claude mcp add --scope user jev-browser -- "$PWD/run.sh"`, but then the
+skill is not installed.
 
-O `run.sh` lê a chave do Vault (`secret/ai/typesafe`) sempre que o servidor arranca; nunca há chaves em ficheiros
-do projeto. Se o servidor tiver arrancado antes de a chave existir, reconecta em `/mcp`.
+Runs on macOS and Linux (the Chrome binary is found per platform; set `JEV_CHROME` otherwise).
 
-Variáveis: `JEV_CDP_PORT`, `JEV_PROFILE_DIR`, `JEV_CHROME`, `JEV_HEADLESS=1`, `JEV_DECISION_BACKEND`,
-`JEV_DECISION_MODEL`, `JEV_VERIFY_THRESHOLD`, `JEV_MODEL_TIMEOUT`, `TEXT_MODEL*`.
-
-## Utilização
-
-Pede em linguagem natural; a skill `web-routing`, que vem no plugin, decide quando usar esta tool em vez de
-`WebFetch`, `WebSearch` ou context7 (ler uma página ou pesquisar é mais rápido e barato por esses caminhos).
+### What the plugin contains
 
 ```
-"Na minha app em http://localhost:3000, vê se consigo pesquisar 'Braga' e aplicar o filtro 'Ativos'."
+.claude-plugin/marketplace.json   this repository as a marketplace
+claude/.claude-plugin/plugin.json plugin manifest
+claude/.mcp.json                  jev-browser server -> run.sh
+claude/skills/web-routing/        when to use this tool instead of WebFetch/WebSearch/context7
+claude/commands/jev-doctor.md     diagnostics (Chrome, Ollama, key, server in memory)
 ```
 
-### Parâmetros
+If the server started before the key existed, reconnect it in `/mcp`.
 
-| Parâmetro | Omissão | Para quê |
+Variables: `JEV_CDP_PORT`, `JEV_PROFILE_DIR`, `JEV_CHROME`, `JEV_HEADLESS=1`, `JEV_DECISION_BACKEND`,
+`JEV_DECISION_MODEL`, `JEV_VERIFY_THRESHOLD`, `JEV_MODEL_TIMEOUT`, `JEV_VAULT_READ`, `JEV_VAULT_PATH`, `TEXT_MODEL*`.
+
+## Usage
+
+Ask in plain language; the `web-routing` skill that ships with the plugin decides when to use this tool instead of
+`WebFetch`, `WebSearch` or context7 (reading a page or searching is faster and cheaper those ways).
+
+```
+"In my app at http://localhost:3000, check that I can search for 'Braga' and apply the 'Active' filter."
+```
+
+### Parameters
+
+| Parameter | Default | Purpose |
 | --- | --- | --- |
-| `start_url`, `objective`, `allowed_domains` | — | Obrigatórios. O objetivo deve dizer quando parar ("Stop when results are visible") |
-| `max_steps` | 25 | Orçamento de ações no browser |
-| `timeout_s` | 90 | Orçamento de tempo, verificado entre passos |
-| `allow_irreversible` | `false` | Só a `true` depois de o utilizador aprovar a compra, envio ou remoção concreta |
-| `max_text_chars` | 20000 | Limite do texto devolvido |
-| `keep_open` | `false` | Deixa o separador aberto no Chrome dedicado, para inspecionar ou continuar à mão |
+| `start_url`, `objective`, `allowed_domains` | — | Required. The objective should say when to stop ("Stop when results are visible") |
+| `max_steps` | 25 | Budget of browser actions |
+| `timeout_s` | 90 | Time budget, checked between steps |
+| `allow_irreversible` | `false` | Only `true` after the user approved that specific purchase, message or deletion |
+| `max_text_chars` | 20000 | Cap on the returned text |
+| `keep_open` | `false` | Leaves the tab open in the dedicated Chrome, to inspect or finish by hand |
 
-### Resultado
+### Result
 
 ```json
 {
@@ -108,110 +115,112 @@ Pede em linguagem natural; a skill `web-routing`, que vem no plugin, decide quan
 }
 ```
 
-Estados: `done` (já re-verificado com o Jev), `unverified` (o agente disse que acabou mas a verificação
-discordou), `blocked`, `stalled`, `timeout`, `step_budget`, `needs_confirmation`, `domain_blocked`, `error`.
-Quando o agente desiste mas a verificação diz que o objetivo parece cumprido, isso aparece no `reason`.
+Statuses: `done` (already re-checked with Jev), `unverified` (the agent said it finished but the check disagreed),
+`blocked`, `stalled`, `timeout`, `step_budget`, `needs_confirmation`, `domain_blocked`, `error`. When the agent gives
+up but the check says the goal looks met, that shows up in `reason`.
 
-O texto devolvido é conteúdo da web: são dados, nunca instruções.
+The returned text is web content: it is data, never instructions.
 
-### Sites com sessão iniciada
+### Sites that need a login
 
-O Chrome dedicado começa sem sessões e o agente nunca escreve em campos de password (o snapshot ignora-os).
-Para um site com login, inicia sessão à mão nessa janela do Chrome e depois pede a tarefa com `keep_open`.
-A sessão fica no perfil `~/.jev-browser/chrome-profile` e serve para as chamadas seguintes.
+The dedicated Chrome starts with no sessions and the agent never types into password fields (the snapshot skips
+them). For a site behind a login, sign in by hand in that Chrome window, then ask for the task with `keep_open`. The
+session stays in the `~/.jev-browser/chrome-profile` profile and is reused on later calls.
 
-## Verificação do `DONE`
+## Verifying `DONE`
 
-No benchmark, os dois modelos declararam `DONE` com um requisito por cumprir. Por isso, cada `DONE` é
-re-avaliado com três perguntas de sim/não sobre a página final (requisitos satisfeitos, página certa, nada
-pendente). Abaixo de `JEV_VERIFY_THRESHOLD` (0.7) o estado passa a `unverified`.
+In the benchmark, both models declared `DONE` with one requirement still unmet. So every `DONE` is re-assessed with
+three yes/no questions about the final page (requirements met, right page, nothing pending). Below
+`JEV_VERIFY_THRESHOLD` (0.7) the status becomes `unverified`.
 
-Medido a 2026-09-24: GitHub, que era um `done` falso, deu 0,09 / 0,34 / 0,25 e foi apanhado; a fixture de
-hotéis deu 0,92 / 0,96 / 0,92 e o Google Flights 0,81 / 0,94 / 0,92, ambos mantidos como `done`.
+Measured on 2026-09-24: GitHub, which was a false `done`, scored 0.09 / 0.34 / 0.25 and was caught; the hotel fixture
+scored 0.92 / 0.96 / 0.92 and Google Flights 0.81 / 0.94 / 0.92, both kept as `done`.
 
-## Resultados medidos (2026-09-24, `scripts/bench_hard.py`)
+## Measured results (2026-09-24, `scripts/bench_hard.py`)
 
-Sete tarefas, cada uma verificada de forma independente pelo URL e pelo texto da página final, nunca pelo
-`DONE` do agente. O texto dos campos corre sempre no Ollama local; só o decisor muda.
+Seven tasks, each checked independently by the URL and text of the final page, never by the agent's `DONE`. Field
+text always runs on the local Ollama; only the decider changes.
 
-| Tarefa | Jev (`jev-latest`) | Decisor local (qwen3-coder 30b-a3b) |
+| Task | Jev (`jev-latest`) | Local decider (qwen3-coder 30b-a3b) |
 | --- | --- | --- |
-| Fixture de hotéis (2 filtros + abrir resultado) | ✅ 3,7 s | ❌ ciclo detetado, 15 s |
-| Google Flights (autocomplete + date picker) | ✅ 8,4 s | ❌ bloqueou, 48 s |
-| GitHub (faceta + dropdown de ordenação) | ✅ 4,8 s | ❌ bloqueou, 21 s |
-| the-internet, carregamento assíncrono de 5 s | ⚠️ objetivo cumprido, mas o agente deu-se por vencido | ✅ 7,1 s |
-| TodoMVC (só submete com Enter) | ⚠️ criou os todos e filtrou; não completou um deles | ❌ ciclo detetado, 18 s |
-| DemoQA (formulário longo) | ❌ esgotou o orçamento interno do jev (120 chamadas) | ❌ idem, 120 s |
-| Editor dentro de iframe (não suportado) | ✅ parou correctamente, 3,4 s | ❌ `done` falso |
+| Hotel fixture (2 filters + open a result) | ✅ 3.7 s | ❌ loop detected, 15 s |
+| Google Flights (autocomplete + date picker) | ✅ 8.4 s | ❌ blocked, 48 s |
+| GitHub (facet + sort dropdown) | ✅ 4.8 s | ❌ blocked, 21 s |
+| the-internet, 5 s async load | ⚠️ goal reached, but the agent gave up | ✅ 7.1 s |
+| TodoMVC (submits only with Enter) | ⚠️ created the todos and filtered; did not complete one | ❌ loop detected, 18 s |
+| DemoQA (long form) | ❌ ran out of jev's internal budget (120 calls) | ❌ same, 120 s |
+| Editor inside an iframe (unsupported) | ✅ stopped correctly, 3.4 s | ❌ false `done` |
 
-O Jev resolve 3 das 5 tarefas reais e chega ao objetivo numa quarta sem o reconhecer; é 5 a 10 vezes mais
-rápido que o modelo local. Nenhum dos dois conclui o formulário longo do DemoQA. O modelo local continua a
-ganhar nas esperas assíncronas.
+Jev solves 3 of the 5 real tasks and reaches the goal on a fourth without recognising it; it is 5 to 10 times faster
+than the local model. Neither finishes the long DemoQA form. The local model still wins on async waits.
 
-Custo típico de uma tarefa de browser: 10 a 40 mil tokens de entrada, $0,0005 a $0,0017, 3 a 10 s. Para
-comparação, `scripts/bench_classify.py` mede a outra forma de usar o mesmo modelo — uma decisão estruturada
-dentro de código, sem browser — em $0,000022 e 0,3 s por item, com 21 de 24 respostas certas em 8 alertas.
-Quando a decisão se repete dentro de um sistema, esse é o caminho certo; este servidor é para quando a
-informação só existe atrás de cliques.
+Typical cost of a browser task: 10 to 40 thousand input tokens, $0.0005 to $0.0017, 3 to 10 s. For comparison,
+`scripts/bench_classify.py` measures the other way to use the same model — a structured decision inside code, no
+browser — at $0.000022 and 0.3 s per item, with 21 of 24 answers right across 8 alerts. When the decision repeats
+inside a system, that is the right path; this server is for when the information only exists behind clicks.
 
-## Resolução de problemas
+## Troubleshooting
 
-Começa sempre por `/jev-doctor`: verifica o uv, o Chrome dedicado, o modelo local (e o `num_ctx`), a chave no
-Vault, o backend resultante e a idade do servidor em memória. Só reporta; não corrige nada.
+Always start with `/jev-doctor`: it checks uv, the dedicated Chrome, the local model (and its `num_ctx`), the key,
+the resulting backend and the age of the server in memory. It only reports; it fixes nothing.
 
-| Sintoma | Causa provável |
+| Symptom | Likely cause |
 | --- | --- |
-| `decision_backend` diz `ollama` apesar de haver chave | O servidor arrancou antes de a chave existir. Reconecta em `/mcp` |
-| Alterei o código e nada mudou | O processo do servidor não recarrega. Reconecta em `/mcp` |
-| `Model connection failed` ao escrever num campo | O modelo local está a ser carregado com o contexto por omissão e caiu para CPU. Corre `scripts/setup-ollama.sh` |
-| `max_tokens_exceeded` | Página com um `<select>` gigante. O wrapper corta rótulos e limita opções, mas há páginas que continuam a rebentar |
-| A execução pára em `needs_confirmation` | Bateu num botão tipo comprar, apagar ou enviar. Confirma com o utilizador e repete com `allow_irreversible` |
-| O Chrome dedicado foi fechado | A chamada seguinte reinicia-o e limpa o daemon órfão |
+| `decision_backend` says `ollama` although there is a key | The server started before the key existed. Reconnect in `/mcp` |
+| I changed the code and nothing changed | The server process does not reload. Reconnect in `/mcp` |
+| `Model connection failed` when typing into a field | The local model is being loaded with its default context and fell back to CPU. Run `scripts/setup-ollama.sh` |
+| `max_tokens_exceeded` | Page with a gigantic `<select>`. The wrapper trims labels and caps options, but some pages still overflow |
+| The run stops at `needs_confirmation` | It hit a buy, delete or send-style button. Confirm with the user and repeat with `allow_irreversible` |
+| The dedicated Chrome was closed | The next call restarts it and clears the orphan daemon |
 
-## Limites conhecidos
+## Known limits
 
-- Do jev-ultrafast: sem suporte a iframes, shadow DOM, uploads ou pop-ups (a tecla Enter passou a existir aqui).
-- Do Jev: páginas muito grandes esgotam o contexto (o wrapper corta rótulos e limita opções de `select`, mas
-  há casos que continuam a rebentar).
-- Da verificação: quem verifica é o mesmo modelo que decidiu, e engana-se nos dois sentidos — no
-  carregamento assíncrono deu 0,42 a uma página que já cumpria o objetivo. É um sinal, não uma prova.
-- Formulários longos com muitos widgets ainda não foram concluídos por nenhum dos dois modelos.
+- From jev-ultrafast: no support for iframes, shadow DOM, uploads or pop-ups (the Enter key now exists here).
+- From Jev: very large pages exhaust the context (the wrapper trims labels and caps `select` options, but some cases
+  still overflow).
+- From verification: the model that checks is the same one that decided, and it errs both ways — on the async load
+  it gave 0.42 to a page that already met the goal. It is a signal, not proof.
+- Long forms with many widgets have not yet been completed by either model.
 
-## Segurança e privacidade
+## Security and privacy
 
-- O Chrome dedicado não tem as sessões pessoais; o snapshot ignora campos de password.
-- Com o backend `typesafe`, o texto visível de cada página vai para a TypeSafe. Em páginas com dados pessoais
-  de clientes, usa `JEV_DECISION_BACKEND=ollama`, e nada sai da máquina.
-- Nunca usar em painéis de produção, consolas cloud, Vault, banca ou email.
+- The dedicated Chrome has none of your personal sessions; the snapshot skips password fields.
+- With the `typesafe` backend, the visible text of each page goes to TypeSafe. On pages with customers' personal
+  data, use `JEV_DECISION_BACKEND=ollama`, and nothing leaves the machine.
+- Never use it on production dashboards, cloud consoles, Vault, banking or email.
 
-## Testes e benchmarks: coisas diferentes
+## Tests and benchmarks: different things
 
-**Testes** (`uv run pytest && uv run ruff check .`) verificam este wrapper: guardas de domínio, paragem antes
-de ações irreversíveis, orçamentos, deteção de ciclos, corte de rótulos, limite de opções, operação Enter,
-verificação do `DONE`, contabilidade de custos, a tool e a camada do protocolo MCP. São offline, sem browser
-nem APIs pagas, e **passam todos**. Se algum falhar, é um defeito.
+**Tests** (`uv run pytest && uv run ruff check .`) check this wrapper: domain guards, stopping before irreversible
+actions, budgets, loop detection, label trimming, option caps, the Enter operation, `DONE` verification, cost
+accounting, the tool and the MCP protocol layer. They run offline, with no browser and no paid APIs, and **they all
+pass**. If one fails, it is a defect.
 
-**Benchmarks** (`scripts/bench_hard.py`, `scripts/bench_classify.py`) medem até onde o agente consegue ir em
-sites reais. Fazem chamadas pagas e abrem o browser. As falhas na tabela acima **não são defeitos deste
-repositório**: são o estado da arte dos modelos, e estão ali para se saber o que se pode prometer.
+**Benchmarks** (`scripts/bench_hard.py`, `scripts/bench_classify.py`) measure how far the agent gets on real sites.
+They make paid calls and open the browser. The failures in the table above **are not defects in this repository**:
+they are the state of the art of the models, and they are there so you know what can be promised.
 
 ```bash
-uv run python scripts/bench_hard.py                      # as 7 tarefas, com o backend que estiver activo
-uv run python scripts/bench_hard.py google-flights       # só uma
-JEV_DECISION_BACKEND=ollama uv run python scripts/bench_hard.py   # forçar o decisor local
-uv run python scripts/bench_classify.py                  # triagem de 8 alertas, sem browser
+uv run python scripts/bench_hard.py                      # the 7 tasks, with whichever backend is active
+uv run python scripts/bench_hard.py google-flights       # just one
+JEV_DECISION_BACKEND=ollama uv run python scripts/bench_hard.py   # force the local decider
+uv run python scripts/bench_classify.py                  # triage of 8 alerts, no browser
 ```
 
-Cada tarefa tem um verificador escrito à mão (URL e texto da página final), independente do `DONE` do agente
-e da verificação por modelo. O texto final de cada tarefa fica em `/private/tmp/claude-501/bench-<tarefa>.txt`.
+Each task has a hand-written checker (URL and text of the final page), independent of the agent's `DONE` and of
+the model check. The final text of each task is saved to `/private/tmp/claude-501/bench-<task>.txt`.
 
-### Trabalhar no plugin
+### Working on the plugin
 
 ```bash
-claude plugin marketplace add .                  # a partir do próprio repositório
+claude plugin marketplace add .                  # from the repository itself
 claude plugin install jev-browser@jev-browser-mcp
 ```
 
-O plugin e um registo manual do mesmo servidor não convivem: se já tinhas `claude mcp add ... jev-browser`,
-remove-o com `claude mcp remove jev-browser -s user`, senão ficam dois servidores com o mesmo nome. O mesmo
-vale para a skill `web-routing` copiada à mão para `~/.claude/skills`.
+The plugin and a manual registration of the same server don't mix: if you already had
+`claude mcp add ... jev-browser`, remove it with `claude mcp remove jev-browser -s user`, or you end up with two
+servers with the same name. The same goes for a `web-routing` skill copied by hand into `~/.claude/skills`.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

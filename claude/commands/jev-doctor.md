@@ -1,17 +1,19 @@
 ---
-description: Diagnostica o agente de browser — Chrome dedicado, modelo local, chave TypeSafe e servidor em memória
+description: Diagnoses the browser agent — dedicated Chrome, local model, TypeSafe key and the server in memory
 ---
 
-Corre o diagnóstico e interpreta o resultado para o utilizador:
+Run the diagnostics and interpret the result for the user, in the user's language:
 
 !`bash "${CLAUDE_PLUGIN_ROOT}/../scripts/doctor.sh"`
 
-Cada linha vem como `OK|AVISO|FALHA <área>: <detalhe>`. Na tua resposta:
+Each line comes as `OK|WARN|FAIL <area>: <detail>`. In your answer:
 
-- Se houver `FALHA`, indica a ação concreta de cada uma (o detalhe já a diz) e não digas que está operacional.
-- `AVISO` não impede o uso, mas explica a consequência (por exemplo: sem chave, as decisões são mais lentas e não há verificação do `DONE`).
-- Se estiver tudo `OK`, diz numa linha qual o backend que vai ser usado e segue em frente.
+- If there is a `FAIL`, give the concrete action for each one (the detail already says it) and don't say it is
+  operational.
+- `WARN` doesn't block use, but explain the consequence (for example: without a key, decisions are slower and there
+  is no `DONE` verification).
+- If everything is `OK`, say in one line which backend will be used and move on.
 
-Não corrijas nada sem o utilizador pedir. As duas ações com efeitos são guardar a chave
-(`scripts/store-typesafe-key.sh`, que precisa da chave na área de transferência) e criar o modelo local
-(`scripts/setup-ollama.sh`, que descarrega/deriva um modelo de vários GB).
+Don't fix anything unless the user asks. The two actions with side effects are storing the key
+(`scripts/store-typesafe-key.sh`, which needs the key on the clipboard) and creating the local model
+(`scripts/setup-ollama.sh`, which downloads/derives a model of several GB).
