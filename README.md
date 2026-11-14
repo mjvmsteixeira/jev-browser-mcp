@@ -17,7 +17,7 @@ fixes for the defects that showed up in real testing.
 library documentation, with context7. This tool is for when the information only exists after clicking, and it is
 about 80 times more expensive per operation than a structured decision made in code (see the numbers below).
 
-**Contents:** [install](#install) · [usage](#usage) · [verification](#verifying-done) · [field-text models](#which-local-model-writes-field-text-2026-11-14-scriptsbench_textpy) ·
+**Contents:** [install](#install) · [usage](#usage) · [verification](#verifying-done) · [field-text models](#which-local-model-writes-field-text) ·
 [results](#measured-results-2026-09-24-scriptsbench_hardpy) · [troubleshooting](#troubleshooting) ·
 [limits](#known-limits) · [security](#security-and-privacy)
 
@@ -159,7 +159,12 @@ Typical cost of a browser task: 10 to 40 thousand input tokens, $0.0005 to $0.00
 browser — at $0.000022 and 0.3 s per item, with 21 of 24 answers right across 8 alerts. When the decision repeats
 inside a system, that is the right path; this server is for when the information only exists behind clicks.
 
-## Which local model writes field text (2026-11-14, `scripts/bench_text.py`)
+## Which local model writes field text
+
+![Normal cases right out of 60, prompt injections resisted out of 6, and median time per field, for nine local models](docs/bench-text.svg)
+
+> Measured on 2026-11-14 with [`scripts/bench_text.py`](scripts/bench_text.py); raw results in
+> [`docs/bench-text-2026-11-14.json`](docs/bench-text-2026-11-14.json), chart drawn by `scripts/chart_bench_text.py`.
 
 Every `TYPE_TEXT` step asks a second model for the value to type ("Lisbon", a date, an email). It runs on Ollama
 and, by default, it is `jev-agent`, a 19 GB model. That size is the biggest install barrier, so nine local models
