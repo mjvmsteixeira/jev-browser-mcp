@@ -32,7 +32,7 @@ def default_chrome():
 
 CHROME = os.environ.get("JEV_CHROME") or default_chrome()
 
-VAULT_READ = os.environ.get("JEV_VAULT_READ", str(Path.home() / "vault" / "vault-read.sh"))
+VAULT_READ = os.environ.get("JEV_VAULT_READ", "")  # opt-in: run.sh sets it for a local Vault
 VAULT_PATH = os.environ.get("JEV_VAULT_PATH", "secret/ai/typesafe")
 
 
@@ -41,7 +41,7 @@ def backend():
     forced = os.environ.get("JEV_DECISION_BACKEND")
     if forced:
         return forced
-    if not os.environ.get("TYPESAFE_API_KEY") and Path(VAULT_READ).exists():
+    if not os.environ.get("TYPESAFE_API_KEY") and VAULT_READ and Path(VAULT_READ).exists():
         try:
             found = subprocess.run(
                 [VAULT_READ, VAULT_PATH, "api_key"], capture_output=True, text=True, timeout=30

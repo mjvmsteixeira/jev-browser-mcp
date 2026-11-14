@@ -3,6 +3,7 @@
 set -uo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 READ="${JEV_VAULT_READ:-$HOME/vault/vault-read.sh}"
+export JEV_VAULT_READ="$READ"
 
 secret() {
   [ -x "$READ" ] || return 0
