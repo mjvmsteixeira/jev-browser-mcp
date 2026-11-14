@@ -68,8 +68,7 @@ Runs on macOS and Linux (the Chrome binary is found per platform; set `JEV_CHROM
 
 ```
 .claude-plugin/marketplace.json   this repository as a marketplace
-claude/.claude-plugin/plugin.json plugin manifest
-claude/.mcp.json                  jev-browser server -> run.sh
+.claude-plugin/plugin.json        plugin manifest; the plugin root is the repository, so run.sh ships with it
 claude/skills/web-routing/        when to use this tool instead of WebFetch/WebSearch/context7
 claude/commands/jev-doctor.md     diagnostics (Chrome, Ollama, key, server in memory)
 ```

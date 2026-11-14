@@ -60,8 +60,7 @@ mas aí a skill fica por instalar.
 
 ```
 .claude-plugin/marketplace.json   este repositório como marketplace
-claude/.claude-plugin/plugin.json manifesto do plugin
-claude/.mcp.json                  servidor jev-browser -> run.sh
+.claude-plugin/plugin.json        manifesto do plugin; a raiz do plugin é o repositório, por isso o run.sh vai com ele
 claude/skills/web-routing/        quando usar esta tool em vez de WebFetch/WebSearch/context7
 claude/commands/jev-doctor.md     diagnóstico (Chrome, Ollama, chave, servidor em memória)
 ```

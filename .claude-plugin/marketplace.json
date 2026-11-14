@@ -9,7 +9,7 @@
     {
       "name": "jev-browser",
       "description": "MCP server (jev-ultrafast) with domain guards, stop before irreversible actions, DONE verification and cost per task. Includes the web routing skill and the /jev-doctor command.",
-      "source": "./claude"
+      "source": "./"
     }
   ]
 }
