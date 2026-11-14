@@ -38,8 +38,25 @@ def host_allowed(url, domains):
     return any(host == d or host.endswith("." + d) for d in domains)
 
 
-def guard(action, page, domains, allow_irreversible):
+def enter_guard(page, allow_irreversible, last_fill):
+    """Enter submits the form or dialog of the field just typed into, so it faces the click guard.
+    The snapshot keeps that scope's text per node; without a known field, every field on the page counts."""
+    if allow_irreversible:
+        return None
+    guards = page.get("guards", {})
+    nodes = [last_fill] if last_fill is not None else [a.get("node") for a in page["actions"] if a["kind"] == "fill"]
+    for node in nodes:
+        scope = (guards.get(str(node)) or [None] * 14)[13:14] or [None]
+        match = IRREVERSIBLE.search(scope[0] or "")
+        if match:
+            return ("needs_confirmation", f"Enter would submit a form with '{match.group(0)}'; not pressed")
+    return None
+
+
+def guard(action, page, domains, allow_irreversible, last_fill=None):
     """Return a stop reason for an action that must not execute, else None."""
+    if action["kind"] == "key":
+        return enter_guard(page, allow_irreversible, last_fill)
     if action["kind"] not in {"click", "select"}:
         return None
     href = (page.get("guards", {}).get(str(action.get("node"))) or [None] * 13)[12]
@@ -108,6 +125,7 @@ def run_task(
     status, reason = None, None
     blocked_retries = 0
     invalid_retries = 0
+    last_fill = None
     try:
         while True:
             if not host_allowed(state["page"]["url"], domains):
@@ -146,12 +164,14 @@ def run_task(
                 agent.command("predict")
                 page, decision = state["page"], state["decision"]
                 action = next((a for a in page["actions"] if a["id"] == decision["choice"]), None)
-                stop = action and guard(action, page, domains, allow_irreversible)
+                stop = action and guard(action, page, domains, allow_irreversible, last_fill)
                 if stop:
                     state["decision"] = None
                     status, reason = stop
                     break
                 agent.command("act", {"fingerprint": page["fingerprint"]})
+                if action and action["kind"] == "fill":
+                    last_fill = action.get("node")
             except StalePage:
                 state["decision"] = None
                 state["status"] = "ready"

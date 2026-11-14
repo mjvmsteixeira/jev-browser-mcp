@@ -41,6 +41,9 @@ def backend():
     forced = os.environ.get("JEV_DECISION_BACKEND")
     if forced:
         return forced
+    if os.environ.get("TYPESAFE_API_KEY") == local_decider.PLACEHOLDER_KEY:
+        # The local decider stays installed in this process; a real key needs a restart to take effect.
+        return "ollama"
     if not os.environ.get("TYPESAFE_API_KEY") and VAULT_READ and Path(VAULT_READ).exists():
         try:
             found = subprocess.run(

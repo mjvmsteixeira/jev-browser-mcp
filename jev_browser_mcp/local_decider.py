@@ -11,6 +11,7 @@ import httpx
 
 OLLAMA_URL = os.environ.get("JEV_OLLAMA_URL", "http://127.0.0.1:11434")
 MODEL = os.environ.get("JEV_DECISION_MODEL", "jev-agent")  # scripts/setup-ollama.sh
+PLACEHOLDER_KEY = "local"  # jev refuses to start without a key; this one never leaves the machine
 CLIENT = httpx.Client(timeout=120)
 
 
@@ -89,4 +90,4 @@ def install():
 
     post_json.local_decider = True
     model.post_json = post_json
-    os.environ.setdefault("TYPESAFE_API_KEY", "local")
+    os.environ.setdefault("TYPESAFE_API_KEY", PLACEHOLDER_KEY)
