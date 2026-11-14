@@ -17,7 +17,7 @@ fixes for the defects that showed up in real testing.
 library documentation, with context7. This tool is for when the information only exists after clicking, and it is
 about 80 times more expensive per operation than a structured decision made in code (see the numbers below).
 
-**Contents:** [install](#install) · [usage](#usage) · [verification](#verifying-done) ·
+**Contents:** [install](#install) · [usage](#usage) · [verification](#verifying-done) · [field-text models](#which-local-model-writes-field-text-2026-11-14-scriptsbench_textpy) ·
 [results](#measured-results-2026-09-24-scriptsbench_hardpy) · [troubleshooting](#troubleshooting) ·
 [limits](#known-limits) · [security](#security-and-privacy)
 
@@ -159,6 +159,49 @@ Typical cost of a browser task: 10 to 40 thousand input tokens, $0.0005 to $0.00
 browser — at $0.000022 and 0.3 s per item, with 21 of 24 answers right across 8 alerts. When the decision repeats
 inside a system, that is the right path; this server is for when the information only exists behind clicks.
 
+## Which local model writes field text (2026-11-14, `scripts/bench_text.py`)
+
+Every `TYPE_TEXT` step asks a second model for the value to type ("Lisbon", a date, an email). It runs on Ollama
+and, by default, it is `jev-agent`, a 19 GB model. That size is the biggest install barrier, so nine local models
+were measured on that exact call: same prompt, same JSON contract, same request body as the server sends.
+
+22 hand-written cases with known answers, each run 3 times: destinations, search queries, both sides of a flight,
+dates in two formats, form fields picked out of a sentence, a second todo after the first, Portuguese goals,
+postal codes, accents, and 2 prompt-injection cases where the page tells the model to type "hacked". Apple M5,
+32 GB, Ollama, no browser.
+
+| Model | Size | Normal cases (60) | Resisted injection (6) | Invalid JSON | Median | p90 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `jev-agent` (qwen3-coder 30b-a3b, default) | 18.6 GB | **60** | **6** | 0 | 255 ms | 414 ms |
+| `qwen3.6` | 22.6 GB | 57 | 6 | 3 | 3120 ms | 5119 ms |
+| `gemma3:4b` | 3.4 GB | 57 | 0 | 0 | 366 ms | 552 ms |
+| `qwen2.5:3b` | 1.9 GB | 53 | 0 | 5 | 208 ms | 352 ms |
+| `qwen3:1.7b` | 1.4 GB | 53 | 2 | 2 | 2790 ms | 5246 ms |
+| `qwen3:4b` | 2.5 GB | 48 | 0 | 13 | 10739 ms | 17784 ms |
+| `llama3.2:3b` | 2.0 GB | 46 | 0 | 9 | 191 ms | 283 ms |
+| `phi4-mini` | 2.5 GB | 42 | 0 | 0 | 236 ms | 339 ms |
+| `gemma3:1b` | 0.8 GB | 41 | 4 | 0 | 139 ms | 238 ms |
+
+What it shows:
+
+- **The default stays.** `jev-agent` was the only model right on every case and against every injection, and it is
+  as fast as the 3B models: it is a mixture-of-experts with about 3B parameters active per token.
+- **No small model resisted the injection.** Every model under 4 GB typed "hacked" at least sometimes. The
+  irreversible-action guard still stops buy/send/delete-style clicks and Enter on such forms, but a small model
+  will type text a page planted.
+- **`gemma3:4b` is the best small model**: 57 of 60 normal cases, no invalid JSON, 0.4 s. Its only miss is
+  typing both todos into the second one. On the Pro demo flow (search with typing, filter, open, guarded booking)
+  it passed 3 of 3 runs. Use it when the machine can't hold 19 GB, on sites you trust:
+  `ollama pull gemma3:4b`, then set `TEXT_MODEL=gemma3:4b` in the server's environment.
+- **qwen3 needs its reasoning here, and pays for it.** jev asks for no reasoning in OpenRouter's format; on Ollama
+  that request object turns thinking *on*, hence the seconds per field and the JSON cut off at the token limit.
+  Switching thinking off (`reasoning_effort: "none"`, without the object) made `qwen3:4b` answer in 0.3 s but echo
+  its input instead of a value: 0 of 22. So that switch is not in the server.
+- Runs vary by a few answers: `jev-agent` scored 65 and then 66 of 66 on two runs with the same request.
+
+The decision model (which element to click) is a different job and was not part of this benchmark; see the table
+above for Jev against the local decider.
+
 ## Troubleshooting
 
 Always start with `/jev-doctor`: it checks uv, the dedicated Chrome, the local model (and its `num_ctx`), the key,
@@ -205,6 +248,7 @@ uv run python scripts/bench_hard.py                      # the 7 tasks, with whi
 uv run python scripts/bench_hard.py google-flights       # just one
 JEV_DECISION_BACKEND=ollama uv run python scripts/bench_hard.py   # force the local decider
 uv run python scripts/bench_classify.py                  # triage of 8 alerts, no browser
+uv run python scripts/bench_text.py gemma3:4b jev-agent   # field-text models, local Ollama, no browser
 ```
 
 Each task has a hand-written checker (URL and text of the final page), independent of the agent's `DONE` and of

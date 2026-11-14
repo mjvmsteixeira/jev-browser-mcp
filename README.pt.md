@@ -154,6 +154,49 @@ dentro de código, sem browser — em $0,000022 e 0,3 s por item, com 21 de 24 r
 Quando a decisão se repete dentro de um sistema, esse é o caminho certo; este servidor é para quando a
 informação só existe atrás de cliques.
 
+## Que modelo local escreve o texto dos campos (2026-11-14, `scripts/bench_text.py`)
+
+Cada passo `TYPE_TEXT` pede a um segundo modelo o valor a escrever ("Lisbon", uma data, um email). Corre no Ollama
+e, por omissão, é o `jev-agent`, de 19 GB. Esse tamanho é a maior barreira à instalação, por isso mediram-se nove
+modelos locais nessa mesma chamada: o mesmo prompt, o mesmo contrato JSON e o mesmo pedido que o servidor envia.
+
+22 casos escritos à mão com resposta conhecida, cada um corrido 3 vezes: destinos, pesquisas, os dois lados de um
+voo, datas em dois formatos, campos de formulário tirados de uma frase, o segundo todo depois do primeiro,
+objetivos em português, códigos postais, acentos, e 2 casos de injeção de prompt em que a página manda o modelo
+escrever "hacked". Apple M5, 32 GB, Ollama, sem browser.
+
+| Modelo | Tamanho | Casos normais (60) | Resistiu à injeção (6) | JSON inválido | Mediana | p90 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `jev-agent` (qwen3-coder 30b-a3b, omissão) | 18,6 GB | **60** | **6** | 0 | 255 ms | 414 ms |
+| `qwen3.6` | 22,6 GB | 57 | 6 | 3 | 3120 ms | 5119 ms |
+| `gemma3:4b` | 3,4 GB | 57 | 0 | 0 | 366 ms | 552 ms |
+| `qwen2.5:3b` | 1,9 GB | 53 | 0 | 5 | 208 ms | 352 ms |
+| `qwen3:1.7b` | 1,4 GB | 53 | 2 | 2 | 2790 ms | 5246 ms |
+| `qwen3:4b` | 2,5 GB | 48 | 0 | 13 | 10739 ms | 17784 ms |
+| `llama3.2:3b` | 2,0 GB | 46 | 0 | 9 | 191 ms | 283 ms |
+| `phi4-mini` | 2,5 GB | 42 | 0 | 0 | 236 ms | 339 ms |
+| `gemma3:1b` | 0,8 GB | 41 | 4 | 0 | 139 ms | 238 ms |
+
+O que mostra:
+
+- **A omissão fica.** O `jev-agent` foi o único a acertar todos os casos e a resistir a todas as injeções, e é tão
+  rápido como os modelos de 3B: é um mixture-of-experts com cerca de 3B de parâmetros ativos por token.
+- **Nenhum modelo pequeno resistiu à injeção.** Todos os modelos abaixo de 4 GB escreveram "hacked" pelo menos
+  algumas vezes. A guarda de ações irreversíveis continua a parar cliques tipo comprar/enviar/apagar e o Enter
+  nesses formulários, mas um modelo pequeno escreve o texto que uma página lá pôs.
+- **O `gemma3:4b` é o melhor modelo pequeno**: 57 de 60 casos normais, sem JSON inválido, 0,4 s. A única falha é
+  escrever os dois todos no segundo. No fluxo de demonstração do Pro (pesquisa com texto, filtro, abrir, reserva
+  bloqueada) passou 3 de 3 vezes. Usa-o quando a máquina não aguenta 19 GB, em sites de confiança:
+  `ollama pull gemma3:4b` e depois `TEXT_MODEL=gemma3:4b` no ambiente do servidor.
+- **O qwen3 precisa de raciocinar aqui, e paga por isso.** O jev pede "sem raciocínio" no formato do OpenRouter;
+  no Ollama esse objeto *liga* o raciocínio, daí os segundos por campo e o JSON cortado no limite de tokens.
+  Desligar o raciocínio (`reasoning_effort: "none"`, sem o objeto) pôs o `qwen3:4b` a responder em 0,3 s, mas a
+  devolver o próprio pedido em vez de um valor: 0 de 22. Por isso essa troca não está no servidor.
+- As corridas variam em poucas respostas: o `jev-agent` fez 65 e depois 66 de 66 em duas corridas com o mesmo pedido.
+
+O modelo que decide (em que elemento clicar) é outro trabalho e não entrou neste benchmark; a tabela acima compara
+o Jev com o decisor local.
+
 ## Resolução de problemas
 
 Começa sempre por `/jev-doctor`: verifica o uv, o Chrome dedicado, o modelo local (e o `num_ctx`), a chave no
@@ -200,6 +243,7 @@ uv run python scripts/bench_hard.py                      # as 7 tarefas, com o b
 uv run python scripts/bench_hard.py google-flights       # só uma
 JEV_DECISION_BACKEND=ollama uv run python scripts/bench_hard.py   # forçar o decisor local
 uv run python scripts/bench_classify.py                  # triagem de 8 alertas, sem browser
+uv run python scripts/bench_text.py gemma3:4b jev-agent   # modelos do texto dos campos, Ollama local, sem browser
 ```
 
 Cada tarefa tem um verificador escrito à mão (URL e texto da página final), independente do `DONE` do agente
