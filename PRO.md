@@ -2,8 +2,8 @@
 
 *[Versão em português](PRO.pt.md)*
 
-This repository is free and MIT-licensed, and it stays that way. **Jev Browser Pro** is a paid package built on top of
-it, for one job the free plugin does not do: **regression-testing your own web app** before every merge.
+This repository is free and MIT-licensed, and it stays that way. **Jev Browser Pro** is a paid skill that works with
+the free plugin, for one job the free plugin does not do: **regression-testing your own web app** before every merge.
 
 ## What Pro adds
 
@@ -38,31 +38,30 @@ expect_no_text = ["Booking confirmed"]
   and the expected status.
 - **Expected-guard checks**: prove that "Book now", "Delete account" or "Place order" cannot be clicked by an agent
   without approval.
-- **Runs from your agent or from CI**: the `run_flows` MCP tool, and the `jev-flows` command for the shell (exit code
-  0 or 1), with Markdown and JSON reports.
+- **Runs from your agent, the shell or CI**: a one-file runner (Python standard library only) that your agent saves
+  into your project. Exit code 0 or 1, with Markdown and JSON reports.
 - **A skill** that teaches your agent to write flows for your app and to read every result.
-- **A demo site and example flow** that run in under a minute, an installer and a doctor script.
-- **More agents**: Claude Code, plus Cursor and Codex CLI.
+- **A demo site and example flow** that run in under a minute, recipes and troubleshooting.
 
 ## Free vs Pro
 
 | | Free (this repository) | Pro |
 | --- | --- | --- |
-| `browse_interactive`: domain allowlist, stop before irreversible clicks, `DONE` re-check, budgets | Yes | Yes, the same code, bundled |
+| `browse_interactive`: domain allowlist, stop before irreversible clicks, `DONE` re-check, budgets | Yes | Yes, from the free plugin |
 | QA flows in TOML, checked by your own rules | No | Yes |
-| `run_flows` MCP tool and `jev-flows` for the shell and CI | No | Yes |
+| Flow runner for the agent, the shell and CI | No | Yes |
 | Markdown and JSON reports | No | Yes |
 | Demo site and example flow | No | Yes |
-| Agents | Claude Code | Claude Code, Cursor, Codex CLI |
-| Install | `/plugin install` | `scripts/install.sh` from a zip |
-| Licence | MIT | Pro content proprietary; bundled core MIT |
+| Agents | Claude Code | Claude Code |
+| Install | `/plugin install` | The free plugin, plus the Pro skill from Agensi |
+| Licence | MIT | Proprietary |
 | Price | Free | One-time purchase |
 
 **Which one do I need?** To let Claude Code fill forms and click through sites while you work, the free plugin is
 enough. To check that a journey on your app still works after each change, without writing selectors, get Pro.
 
-Install one or the other, not both: each starts its own `jev-browser` server, and both drive the same dedicated Chrome
-on port 9333.
+Pro is not a second browser server: it needs the free plugin installed, and uses its `browse_interactive` tool for
+every step.
 
 ## How to get Pro
 
