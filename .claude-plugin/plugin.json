@@ -12,5 +12,12 @@
     "mcp",
     "jev",
     "typesafe"
-  ]
+  ],
+  "commands": "./claude/commands",
+  "skills": "./claude/skills",
+  "mcpServers": {
+    "jev-browser": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/run.sh"
+    }
+  }
 }
