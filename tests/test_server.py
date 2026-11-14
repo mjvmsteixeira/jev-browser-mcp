@@ -131,3 +131,46 @@ def test_enter_refuses_a_stale_page(monkeypatch):
     server.patch_enter()
     with pytest.raises(StalePage):
         Browser.act(Browser.__new__(Browser), dict(server.ENTER), {"marker": 1})
+
+
+def test_a_daemon_timeout_on_first_navigation_restarts_the_daemon_and_retries_once(monkeypatch):
+    """Measured: a fresh Chrome profile can drop the daemon's first connection, so Page.navigate times out."""
+    import sys
+    import types
+
+    from browser_harness import admin
+
+    attempts, restarts = [], []
+
+    class FlakyAgent:
+        def __init__(self, url, goal):
+            attempts.append(url)
+            if len(attempts) == 1:
+                raise TimeoutError("Page.navigate timed out after 5s waiting for the daemon")
+
+    monkeypatch.setitem(sys.modules, "jev_ultrafast", types.SimpleNamespace(Agent=FlakyAgent))
+    monkeypatch.setattr(admin, "restart_daemon", lambda *a, **k: restarts.append(True))
+    monkeypatch.setattr(server, "ensure_chrome", lambda: None)
+    monkeypatch.setattr(server.time, "sleep", lambda _s: None)
+
+    assert isinstance(server.make_agent("https://example.com", "goal"), FlakyAgent)
+    assert len(attempts) == 2 and len(restarts) == 1
+
+
+def test_a_second_daemon_timeout_is_not_retried_again(monkeypatch):
+    import sys
+    import types
+
+    from browser_harness import admin
+
+    class DeadAgent:
+        def __init__(self, url, goal):
+            raise TimeoutError("Page.navigate timed out after 5s waiting for the daemon")
+
+    monkeypatch.setitem(sys.modules, "jev_ultrafast", types.SimpleNamespace(Agent=DeadAgent))
+    monkeypatch.setattr(admin, "restart_daemon", lambda *a, **k: None)
+    monkeypatch.setattr(server, "ensure_chrome", lambda: None)
+    monkeypatch.setattr(server.time, "sleep", lambda _s: None)
+
+    with pytest.raises(TimeoutError):
+        server.make_agent("https://example.com", "goal")

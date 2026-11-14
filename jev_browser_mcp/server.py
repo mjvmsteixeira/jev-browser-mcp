@@ -198,7 +198,16 @@ def prepare_models():
 def make_agent(url, goal):
     from jev_ultrafast import Agent
 
-    return Agent(url, goal)
+    try:
+        return Agent(url, goal)
+    except TimeoutError:
+        # Measured: on a fresh profile Chrome can drop the daemon's first connection right after CDP is up.
+        from browser_harness.admin import restart_daemon
+
+        restart_daemon()
+        time.sleep(1)
+        ensure_chrome()
+        return Agent(url, goal)
 
 
 @mcp.tool()
