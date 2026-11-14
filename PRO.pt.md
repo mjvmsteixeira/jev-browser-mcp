@@ -1,0 +1,83 @@
+# Jev Browser Pro
+
+*[English version](PRO.md)*
+
+Este repositório é gratuito e tem licença MIT, e assim continua. O **Jev Browser Pro** é um pacote pago construído por
+cima dele, para uma tarefa que o plugin gratuito não faz: **testes de regressão à tua própria aplicação web** antes de
+cada merge.
+
+## O que o Pro acrescenta
+
+Descreves um percurso de utilizador em poucas linhas de TOML, por exemplo "pesquisa Lisboa, marca Cancelamento
+gratuito, abre a Casa Flora, e o Book now tem de estar protegido". O Pro corre-o e devolve um relatório de passou ou
+falhou. Não há seletores para manter: o agente de browser faz os cliques e **as tuas próprias verificações** decidem
+cada passo. O agente dizer que terminou nunca conta.
+
+```toml
+name = "Demo stays: search, filter, open, booking is guarded"
+base_url = "http://127.0.0.1:8800"
+allowed_domains = ["127.0.0.1"]
+
+[[step]]
+goal = "Type Lisbon as the destination, tick Free cancellation and search. Stop when the results are visible."
+path = "/index.html"
+expect_url = "q=Lisbon"
+expect_text = ["Results for Lisbon", "Casa Flora"]
+expect_no_text = ["Rio Hostel", "No stays found"]
+
+[[step]]
+goal = "Open Casa Flora. Stop when its page is visible."
+expect_text = ["Casa Flora", "Book now"]
+
+[[step]]
+goal = "Click Book now."
+expect_status = "needs_confirmation"
+expect_no_text = ["Booking confirmed"]
+```
+
+- **QA flows**: percursos em TOML, cada passo verificado pelo URL, por texto que tem ou não pode estar na página e pelo
+  estado esperado.
+- **Verificação das proteções**: prova que "Book now", "Apagar conta" ou "Finalizar encomenda" não podem ser clicados
+  por um agente sem aprovação.
+- **Corre a partir do agente ou da CI**: a tool MCP `run_flows` e o comando `jev-flows` para a shell (exit code 0 ou 1),
+  com relatórios em Markdown e JSON.
+- **Uma skill** que ensina o agente a escrever flows para a tua aplicação e a ler cada resultado.
+- **Um site de demonstração e um flow de exemplo** que correm em menos de um minuto, um instalador e um script de
+  diagnóstico.
+- **Mais agentes**: Claude Code, e também Cursor e Codex CLI.
+
+## Gratuito vs Pro
+
+| | Gratuito (este repositório) | Pro |
+| --- | --- | --- |
+| `browse_interactive`: lista de domínios, paragem antes de cliques irreversíveis, reverificação do `DONE`, limites | Sim | Sim, o mesmo código, incluído |
+| QA flows em TOML, verificados pelas tuas regras | Não | Sim |
+| Tool MCP `run_flows` e `jev-flows` para a shell e a CI | Não | Sim |
+| Relatórios em Markdown e JSON | Não | Sim |
+| Site de demonstração e flow de exemplo | Não | Sim |
+| Agentes | Claude Code | Claude Code, Cursor, Codex CLI |
+| Instalação | `/plugin install` | `scripts/install.sh` a partir de um zip |
+| Licença | MIT | Conteúdo Pro proprietário; núcleo incluído em MIT |
+| Preço | Gratuito | Compra única |
+
+**De qual preciso?** Para o Claude Code preencher formulários e navegar em sites enquanto trabalhas, o plugin
+gratuito chega. Para confirmar, depois de cada alteração, que um percurso da tua aplicação continua a funcionar, sem
+escrever seletores, o Pro.
+
+Instala um ou outro, não os dois: cada um arranca o seu próprio servidor `jev-browser` e ambos usam o mesmo Chrome
+dedicado na porta 9333.
+
+## Como obter o Pro
+
+O Pro vai ser vendido na [Agensi](https://agensi.io), um marketplace de skills para agentes, em compra única. **Ainda
+não está listado.** Esta página vai ter o link para a listagem assim que for aprovada.
+
+Queres saber quando sair? Segue este repositório (Watch → Custom → Releases) ou abre uma
+[issue](https://github.com/mjvmsteixeira/jev-browser-mcp/issues).
+
+## Limites, sem rodeios (nas duas edições)
+
+- Sem iframes, shadow DOM, canvas, upload de ficheiros nem pop-ups.
+- Formulários longos com muitos widgets próprios não são preenchidos de forma fiável num só passo.
+- Com uma chave TypeSafe, o texto visível de cada página vai para a TypeSafe. Sem chave, tudo corre na tua máquina,
+  mais devagar.
