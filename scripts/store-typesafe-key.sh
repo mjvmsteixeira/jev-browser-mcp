@@ -10,7 +10,7 @@ if [ "$code" != "200" ]; then
   echo "Copy the API key itself from console.typesafe.ai/keys, not this command." >&2
   exit 1
 fi
-TOKEN=$(jq -r .root_token /Users/mjvmst/vault/vault-init.json)
+TOKEN=$(jq -r .root_token "${VAULT_INIT_FILE:-$HOME/vault/vault-init.json}")
 printf '%s' "$KEY" | docker exec -i -e VAULT_ADDR=https://127.0.0.1:8200 -e VAULT_CACERT=/vault/tls/ca.pem \
   -e VAULT_TOKEN="$TOKEN" vault vault kv put secret/ai/typesafe api_key=- >/dev/null
 printf '' | pbcopy

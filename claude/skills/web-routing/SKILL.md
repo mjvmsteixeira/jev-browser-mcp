@@ -42,7 +42,7 @@ Your own knowledge is still valid for stable facts; use the web when the answer 
    - `error` with a missing key — run `/jev-doctor`, which says how to provide the key.
 5. **Extract the answer yourself**: the agent only navigates. The answer to the request comes from
    `page_text_untrusted`.
-6. **`decision_backend`**: `typesafe` (Jev, fast) or `ollama` (local decider, no TypeSafe key: ~5–13 s per step,
+6. **`decision_backend`**: `typesafe` (Jev, fast) or `ollama` (local decider, no TypeSafe key: ~2–13 s per step,
    everything stays local). With `ollama`, use it only for 1–3 step tasks (search, open a result, one filter, wait
    for content); in the benchmark it failed date pickers, long selects and custom dropdowns, and declared false
    `done`s. Give `timeout_s` 150+ and always verify.

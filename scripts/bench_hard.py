@@ -9,6 +9,7 @@ import http.server
 import importlib.util
 import json
 import sys
+import tempfile
 import threading
 import unicodedata
 from pathlib import Path
@@ -135,7 +136,7 @@ def main():
             continue
         print(f"\n=== {task['name']} ({task['kind']})", flush=True)
         server.OBJECTIVE = task["objective"]
-        text_dump = Path(f"/private/tmp/claude-501/bench-{task['name']}.txt")
+        text_dump = Path(tempfile.gettempdir()) / f"bench-{task['name']}.txt"
         try:
             result = run_task(
                 make_agent,

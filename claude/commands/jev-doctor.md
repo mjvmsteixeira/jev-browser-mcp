@@ -4,7 +4,7 @@ description: Diagnoses the browser agent — dedicated Chrome, local model, Type
 
 Run the diagnostics and interpret the result for the user, in the user's language:
 
-!`bash "${CLAUDE_PLUGIN_ROOT}/../scripts/doctor.sh"`
+!`bash "${CLAUDE_PLUGIN_ROOT}/scripts/doctor.sh"`
 
 Each line comes as `OK|WARN|FAIL <area>: <detail>`. In your answer:
 
