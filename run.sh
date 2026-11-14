@@ -2,9 +2,10 @@
 # Launch the jev-browser MCP server with keys from the local Vault (never from a .env file).
 set -uo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-READ=/Users/mjvmst/vault/vault-read.sh
+READ="${JEV_VAULT_READ:-$HOME/vault/vault-read.sh}"
 
 secret() {
+  [ -x "$READ" ] || return 0
   local value
   value=$("$READ" "$1" "$2" 2>/dev/null) || return 0
   [ "$value" != "null" ] && printf '%s' "$value"
@@ -18,4 +19,5 @@ export TEXT_MODEL_BASE_URL="${TEXT_MODEL_BASE_URL:-http://127.0.0.1:11434/v1}"
 export TEXT_MODEL="${TEXT_MODEL:-jev-agent}"  # created by scripts/setup-ollama.sh
 export TEXT_MODEL_REASONING="${TEXT_MODEL_REASONING:-none}"
 
-exec /Users/mjvmst/.local/bin/uv run --quiet --directory "$DIR" jev-browser-mcp
+UV="$(command -v uv || echo "$HOME/.local/bin/uv")"
+exec "$UV" run --quiet --directory "$DIR" jev-browser-mcp

@@ -1,6 +1,7 @@
 """MCP server exposing jev-ultrafast as one guarded tool, on a dedicated Chrome profile."""
 
 import os
+import shutil
 import subprocess
 import sys
 import threading
@@ -16,9 +17,22 @@ from .runner import run_task
 from .verify import verify
 
 PROFILE_DIR = Path(os.environ.get("JEV_PROFILE_DIR", Path.home() / ".jev-browser" / "chrome-profile"))
-CHROME = os.environ.get("JEV_CHROME", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
+MAC_CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 
-VAULT_READ = os.environ.get("JEV_VAULT_READ", "/Users/mjvmst/vault/vault-read.sh")
+
+def default_chrome():
+    if sys.platform == "darwin":
+        return MAC_CHROME
+    for name in ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser"):
+        found = shutil.which(name)
+        if found:
+            return found
+    return "google-chrome"
+
+
+CHROME = os.environ.get("JEV_CHROME") or default_chrome()
+
+VAULT_READ = os.environ.get("JEV_VAULT_READ", str(Path.home() / "vault" / "vault-read.sh"))
 VAULT_PATH = os.environ.get("JEV_VAULT_PATH", "secret/ai/typesafe")
 
 
