@@ -17,6 +17,9 @@ contabilidade de custos e as correções dos defeitos que apareceram a testar a 
 depois de cliques, e é cerca de 80 vezes mais cara por operação do que uma decisão estruturada em código
 (ver os números mais abaixo).
 
+**Queres testar a tua própria aplicação web?** O [Jev Browser Pro](PRO.pt.md) acrescenta QA flows a este plugin:
+percursos em TOML com relatórios de passou ou falhou para a CI. Este plugin continua gratuito.
+
 **Índice:** [instalação](#instalação) · [utilização](#utilização) · [verificação](#verificação-do-done) ·
 [resultados](#resultados-medidos-2026-09-24-scriptsbench_hardpy) · [problemas](#resolução-de-problemas) ·
 [limites](#limites-conhecidos) · [segurança](#segurança-e-privacidade)

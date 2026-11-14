@@ -17,6 +17,9 @@ fixes for the defects that showed up in real testing.
 library documentation, with context7. This tool is for when the information only exists after clicking, and it is
 about 80 times more expensive per operation than a structured decision made in code (see the numbers below).
 
+**Testing your own web app?** [Jev Browser Pro](PRO.md) adds QA flows on top of this plugin: user journeys in
+TOML with pass/fail reports for CI. This plugin stays free.
+
 **Contents:** [install](#install) · [usage](#usage) · [verification](#verifying-done) · [field-text models](#which-local-model-writes-field-text) ·
 [results](#measured-results-2026-09-24-scriptsbench_hardpy) · [troubleshooting](#troubleshooting) ·
 [limits](#known-limits) · [security](#security-and-privacy)
