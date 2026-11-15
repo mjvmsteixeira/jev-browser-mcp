@@ -70,11 +70,10 @@ Pro usa-o.
 
 ## Como obter o Pro
 
-O Pro vai ser vendido na [Agensi](https://agensi.io), um marketplace de skills para agentes, em compra única. **Ainda
-não está listado.** Esta página vai ter o link para a listagem assim que for aprovada.
+O Pro é vendido na [Agensi](https://agensi.io), um marketplace de skills para agentes, em compra única de $15:
+[Jev Browser Pro na Agensi](https://agensi.io/skills/jev-browser-pro-qa-flows-run-by-a-guarded-browser-agent).
 
-Queres saber quando sair? Segue este repositório (Watch → Custom → Releases) ou abre uma
-[issue](https://github.com/mjvmsteixeira/jev-browser-mcp/issues).
+Dúvidas antes de comprar? Abre uma [issue](https://github.com/mjvmsteixeira/jev-browser-mcp/issues).
 
 ## Limites, sem rodeios (nas duas edições)
 
